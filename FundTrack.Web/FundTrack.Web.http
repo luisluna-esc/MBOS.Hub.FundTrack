@@ -1,0 +1,11 @@
+@FundTrack.Web_HostAddress = http://localhost:5142
+
+POST {{FundTrack.Web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "mbos@fundtrack.local",
+  "password": "mbos12345"
+}
+
+###

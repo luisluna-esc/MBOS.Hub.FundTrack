@@ -1,0 +1,35 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+
+## Visual Studio / Rider
+.vs/
+.idea/
+*.userosscache
+*.sln.docstates
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ll]og/
+[Ll]ogs/
+
+## Rider
+*.DotSettings.user
+
+## NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+
+## FundTrack: respaldos de arqueos subidos por los usuarios (fotos, actas).
+## Son datos, no código: se respaldan con la base, nunca van al repositorio.
+**/App_Data/
+
+## OS files
+.DS_Store
+Thumbs.db
