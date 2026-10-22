@@ -8,7 +8,7 @@
 --   3. Arqueos de junio a septiembre de 2026 para las Iglesias y Grupos
 --      activos, con algunas diferencias en cada estado y su seguimiento.
 -- Se puede correr más de una vez: lo que ya existe no se duplica.
--- Los arqueos de ejemplo quedan creados por analista@fundtrack.local; así
+-- Los arqueos de ejemplo quedan creados por analista.fundtrack; así
 -- deleteSampleData.sql los puede borrar sin tocar datos reales.
 -- No pasa por la API, por eso no deja filas en audit_log.
 -- =====================================================================
@@ -21,37 +21,37 @@ SELECT setseed(0.42);
 -- ---------------------------------------------------------------------
 -- 1. Usuarios de ejemplo, uno por rol
 -- ---------------------------------------------------------------------
-INSERT INTO app_user (full_name, email, password_hash, must_change_password, is_active, pastor_id, created_by, created_at)
-SELECT v.full_name, v.email,
+INSERT INTO app_user (full_name, username, password_hash, is_active, pastor_id, created_by, created_at)
+SELECT v.full_name, v.username,
        '$2b$11$fI3ATeiKcUorvL7uwlCfZe6rju.i0roMmIKQwbywLXy5GSD2UUvOi',
-       FALSE, TRUE,
+       TRUE,
        CASE WHEN v.role_name = 'Pastor' THEN (
            SELECT dp.pastor_id FROM district_pastor dp
            JOIN district d ON d.district_id = dp.district_id
            WHERE d.name = 'Villa Remedios' AND dp.end_date IS NULL
            LIMIT 1)
        END,
-       (SELECT app_user_id FROM app_user WHERE email = 'mbos@fundtrack.local'),
+       (SELECT app_user_id FROM app_user WHERE username = 'admin.mbos'),
        NOW() AT TIME ZONE 'UTC'
 FROM (VALUES
-    ('Analista Ejemplo', 'analista@fundtrack.local', 'Analista'),
-    ('Administrador Ejemplo', 'administrador@fundtrack.local', 'Administrador'),
-    ('Tesorero Ejemplo', 'tesorero@fundtrack.local', 'Tesorero'),
-    ('Auditor Ejemplo', 'auditor@fundtrack.local', 'Auditor'),
-    ('Pastor Ejemplo (Villa Remedios)', 'pastor@fundtrack.local', 'Pastor')
-) AS v(full_name, email, role_name)
-WHERE NOT EXISTS (SELECT 1 FROM app_user u WHERE u.email = v.email);
+    ('Analista Ejemplo', 'analista.fundtrack', 'Analista'),
+    ('Administrador Ejemplo', 'administrador.fundtrack', 'Administrador'),
+    ('Tesorero Ejemplo', 'tesorero.fundtrack', 'Tesorero'),
+    ('Auditor Ejemplo', 'auditor.fundtrack', 'Auditor'),
+    ('Pastor Ejemplo (Villa Remedios)', 'pastor.fundtrack', 'Pastor')
+) AS v(full_name, username, role_name)
+WHERE NOT EXISTS (SELECT 1 FROM app_user u WHERE u.username = v.username);
 
 INSERT INTO app_user_role (app_user_id, role_id, assigned_by)
-SELECT u.app_user_id, r.role_id, (SELECT app_user_id FROM app_user WHERE email = 'mbos@fundtrack.local')
+SELECT u.app_user_id, r.role_id, (SELECT app_user_id FROM app_user WHERE username = 'admin.mbos')
 FROM (VALUES
-    ('analista@fundtrack.local', 'Analista'),
-    ('administrador@fundtrack.local', 'Administrador'),
-    ('tesorero@fundtrack.local', 'Tesorero'),
-    ('auditor@fundtrack.local', 'Auditor'),
-    ('pastor@fundtrack.local', 'Pastor')
-) AS v(email, role_name)
-JOIN app_user u ON u.email = v.email
+    ('analista.fundtrack', 'Analista'),
+    ('administrador.fundtrack', 'Administrador'),
+    ('tesorero.fundtrack', 'Tesorero'),
+    ('auditor.fundtrack', 'Auditor'),
+    ('pastor.fundtrack', 'Pastor')
+) AS v(username, role_name)
+JOIN app_user u ON u.username = v.username
 JOIN role r ON r.name = v.role_name
 ON CONFLICT DO NOTHING;
 
@@ -63,7 +63,7 @@ SELECT 2026, m,
        (make_date(2026, m, 1) + INTERVAL '1 month' + INTERVAL '14 days')::date,
        CASE WHEN m <= 7 THEN 'closed' ELSE 'open' END,
        CASE WHEN m <= 7 THEN (make_date(2026, m, 1) + INTERVAL '1 month' + INTERVAL '20 days 14 hours')::timestamp END,
-       CASE WHEN m <= 7 THEN (SELECT app_user_id FROM app_user WHERE email = 'mbos@fundtrack.local') END
+       CASE WHEN m <= 7 THEN (SELECT app_user_id FROM app_user WHERE username = 'admin.mbos') END
 FROM generate_series(1, 12) AS m
 ON CONFLICT (year, month) DO NOTHING;
 
@@ -74,7 +74,7 @@ ON CONFLICT (year, month) DO NOTHING;
 --    15 % de los presentados tiene diferencia (de 10 a 300 Bs).
 -- ---------------------------------------------------------------------
 WITH analyst AS (
-    SELECT app_user_id FROM app_user WHERE email = 'analista@fundtrack.local'
+    SELECT app_user_id FROM app_user WHERE username = 'analista.fundtrack'
 ),
 base AS (
     SELECT c.church_id, c.district_id, c.type, c.treasurer_name, c.elder_name,
@@ -142,7 +142,7 @@ SELECT lfc.local_fund_count_id, 'pending', 'resolved',
        'La Misión revisó el ACMS y da la diferencia por cerrada.',
        lfc.created_by, lfc.created_at + INTERVAL '12 days'
 FROM local_fund_count lfc
-JOIN app_user u ON u.app_user_id = lfc.created_by AND u.email = 'analista@fundtrack.local'
+JOIN app_user u ON u.app_user_id = lfc.created_by AND u.username = 'analista.fundtrack'
 WHERE lfc.difference_status = 'resolved'
   AND NOT EXISTS (SELECT 1 FROM difference_follow_up f WHERE f.local_fund_count_id = lfc.local_fund_count_id);
 

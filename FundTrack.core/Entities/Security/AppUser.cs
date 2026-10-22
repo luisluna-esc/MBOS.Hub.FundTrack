@@ -6,10 +6,10 @@ public class AppUser
     public string? Ci { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
+    /// <summary>Con lo que se entra al sistema: nombre.apellido, en minúsculas y sin tildes.</summary>
+    public string Username { get; set; } = string.Empty;
     public string? Phone { get; set; }
     public long? PastorId { get; set; }
-    public bool MustChangePassword { get; set; } = true;
     public DateTime? PasswordChangedAt { get; set; }
     public int FailedLoginAttempts { get; set; }
     public DateTime? LockedUntil { get; set; }

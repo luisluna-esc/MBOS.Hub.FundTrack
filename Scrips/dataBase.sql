@@ -75,10 +75,10 @@ CREATE TABLE app_user (
     ci VARCHAR(20),
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(200) NOT NULL,
-    email VARCHAR(150) NOT NULL,
+    -- Con lo que se entra al sistema: nombre.apellido (minúsculas, sin tildes).
+    username VARCHAR(100) NOT NULL,
     phone VARCHAR(30),
     pastor_id BIGINT,
-    must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
     password_changed_at TIMESTAMP,
     failed_login_attempts INT NOT NULL DEFAULT 0,
     locked_until TIMESTAMP,
@@ -86,7 +86,7 @@ CREATE TABLE app_user (
     last_login TIMESTAMP,
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_app_user_email UNIQUE (email),
+    CONSTRAINT uq_app_user_username UNIQUE (username),
     CONSTRAINT fk_app_user_pastor FOREIGN KEY (pastor_id) REFERENCES pastor(pastor_id),
     CONSTRAINT fk_app_user_created_by FOREIGN KEY (created_by) REFERENCES app_user(app_user_id)
 );

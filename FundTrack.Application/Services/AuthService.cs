@@ -28,10 +28,10 @@ public class AuthService : IAuthService
 
     public async Task<ResponseGetObject> Login(LoginDto loginDto, string? ipAddress)
     {
-        var email = loginDto.Email.Trim().ToLower();
+        var username = Usernames.Normalize(loginDto.Username);
         var repository = _unitOfWork.Repository<AppUser>();
 
-        var existingUser = await repository.Query().FirstOrDefaultAsync(u => u.Email == email);
+        var existingUser = await repository.Query().FirstOrDefaultAsync(u => u.Username == username);
 
         if (existingUser is null)
         {
@@ -168,7 +168,7 @@ public class AuthService : IAuthService
     private static ResponseGetObject InvalidCredentials() => new()
     {
         Data = new(),
-        Messages = [new Message { Type = MessageType.Error, Description = "Correo o contraseña incorrectos." }],
+        Messages = [new Message { Type = MessageType.Error, Description = "Usuario o contraseña incorrectos." }],
         StatusCode = HttpStatusCode.Unauthorized
     };
 
@@ -205,8 +205,7 @@ public class AuthService : IAuthService
         {
             AppUserId = appUser.AppUserId,
             FullName = appUser.FullName,
-            Email = appUser.Email,
-            MustChangePassword = appUser.MustChangePassword,
+            Username = appUser.Username,
             AccessToken = accessToken,
             AccessTokenExpiresAt = accessTokenExpiresAt,
             RefreshToken = refreshTokenValue,

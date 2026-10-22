@@ -29,10 +29,10 @@ public class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
               .HasMaxLength(200)
               .HasColumnName("full_name");
 
-        entity.Property(e => e.Email)
+        entity.Property(e => e.Username)
               .IsRequired()
-              .HasMaxLength(150)
-              .HasColumnName("email");
+              .HasMaxLength(100)
+              .HasColumnName("username");
 
         entity.Property(e => e.Phone)
               .HasMaxLength(30)
@@ -40,9 +40,6 @@ public class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
 
         entity.Property(e => e.PastorId)
               .HasColumnName("pastor_id");
-
-        entity.Property(e => e.MustChangePassword)
-              .HasColumnName("must_change_password");
 
         entity.Property(e => e.PasswordChangedAt)
               .HasColumnName("password_changed_at")

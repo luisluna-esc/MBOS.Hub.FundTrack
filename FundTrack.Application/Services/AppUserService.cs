@@ -50,10 +50,10 @@ public class AppUserService : IAppUserService
             query = query.Where(u => u.FullName == appUserQueryFilter.FullName);
         }
 
-        if (!string.IsNullOrWhiteSpace(appUserQueryFilter.Email))
+        if (!string.IsNullOrWhiteSpace(appUserQueryFilter.Username))
         {
-            var email = appUserQueryFilter.Email.Trim().ToLower();
-            query = query.Where(u => u.Email == email);
+            var username = Usernames.Normalize(appUserQueryFilter.Username);
+            query = query.Where(u => u.Username == username);
         }
 
         if (!string.IsNullOrWhiteSpace(appUserQueryFilter.Ci))
@@ -66,7 +66,7 @@ public class AppUserService : IAppUserService
             var searchCriteria = paginationQueryFilter.SearchCriteria;
             query = query.Where(u =>
                 u.FullName.Contains(searchCriteria) ||
-                u.Email.Contains(searchCriteria) ||
+                u.Username.Contains(searchCriteria.ToLower()) ||
                 (u.Ci != null && u.Ci.Contains(searchCriteria)));
         }
 
@@ -99,6 +99,12 @@ public class AppUserService : IAppUserService
 
     public async Task<ResponsePost> InsertAppUser(AppUserDto appUserDto)
     {
+        // Sin usuario escrito, se arma con el nombre completo (nombre.apellido) y un número si ya existe.
+        if (string.IsNullOrWhiteSpace(appUserDto.Username))
+        {
+            appUserDto.Username = await NextFreeUsernameAsync(Usernames.FromFullName(appUserDto.FullName));
+        }
+
         var errors = await ValidateAsync(appUserDto, null);
 
         if (string.IsNullOrWhiteSpace(appUserDto.Password))
@@ -116,16 +122,14 @@ public class AppUserService : IAppUserService
             };
         }
 
-        // La contraseña que pone el administrador es temporal: el usuario debe cambiarla al entrar.
         var appUser = new AppUser
         {
             Ci = appUserDto.Ci,
             FullName = appUserDto.FullName,
-            Email = NormalizeEmail(appUserDto.Email),
+            Username = Usernames.Normalize(appUserDto.Username),
             Phone = appUserDto.Phone,
             PastorId = appUserDto.PastorId,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(appUserDto.Password),
-            MustChangePassword = true,
             IsActive = appUserDto.IsActive,
             CreatedById = _currentUserService.AppUserId,
             CreatedAt = DateTime.UtcNow
@@ -144,6 +148,16 @@ public class AppUserService : IAppUserService
 
     public async Task<ResponsePost> UpdateAppUser(long id, AppUserDto appUserDto)
     {
+        if (string.IsNullOrWhiteSpace(appUserDto.Username))
+        {
+            return new ResponsePost
+            {
+                Id = id,
+                Messages = [new Message { Type = MessageType.Error, Description = "El usuario es obligatorio." }],
+                StatusCode = HttpStatusCode.BadRequest
+            };
+        }
+
         var errors = await ValidateAsync(appUserDto, id);
 
         if (errors.Count > 0)
@@ -171,17 +185,16 @@ public class AppUserService : IAppUserService
 
         appUser.Ci = appUserDto.Ci;
         appUser.FullName = appUserDto.FullName;
-        appUser.Email = NormalizeEmail(appUserDto.Email);
+        appUser.Username = Usernames.Normalize(appUserDto.Username);
         appUser.Phone = appUserDto.Phone;
         appUser.PastorId = appUserDto.PastorId;
         appUser.IsActive = appUserDto.IsActive;
 
-        // Si el administrador pone una contraseña nueva, también desbloquea la cuenta
-        // y la contraseña vuelve a ser temporal.
+        // Si el administrador pone una contraseña nueva, también desbloquea la cuenta.
         if (!string.IsNullOrWhiteSpace(appUserDto.Password))
         {
             appUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(appUserDto.Password);
-            appUser.MustChangePassword = true;
+            appUser.PasswordChangedAt = DateTime.UtcNow;
             appUser.FailedLoginAttempts = 0;
             appUser.LockedUntil = null;
         }
@@ -255,10 +268,10 @@ public class AppUserService : IAppUserService
             .Select(e => new Message { Type = MessageType.Error, Description = e.ErrorMessage })
             .ToList();
 
-        var email = NormalizeEmail(appUserDto.Email);
-        if (await _unitOfWork.Repository<AppUser>().Query().AnyAsync(u => u.Email == email && u.AppUserId != id))
+        var username = Usernames.Normalize(appUserDto.Username);
+        if (await _unitOfWork.Repository<AppUser>().Query().AnyAsync(u => u.Username == username && u.AppUserId != id))
         {
-            errors.Add(new Message { Type = MessageType.Error, Description = "This email is already in use." });
+            errors.Add(new Message { Type = MessageType.Error, Description = $"El usuario {username} ya existe." });
         }
 
         if (appUserDto.PastorId.HasValue &&
@@ -270,17 +283,31 @@ public class AppUserService : IAppUserService
         return errors;
     }
 
-    private static string NormalizeEmail(string email) => email.Trim().ToLower();
+    /// <summary>El usuario pedido o, si ya existe, el mismo con 2, 3, 4... al final.</summary>
+    private async Task<string> NextFreeUsernameAsync(string baseUsername)
+    {
+        var taken = await _unitOfWork.Repository<AppUser>().Query()
+            .Where(u => u.Username.StartsWith(baseUsername))
+            .Select(u => u.Username)
+            .ToListAsync();
+
+        if (!taken.Contains(baseUsername))
+            return baseUsername;
+
+        var number = 2;
+        while (taken.Contains($"{baseUsername}{number}"))
+            number++;
+        return $"{baseUsername}{number}";
+    }
 
     private static AppUserDto ToDto(AppUser appUser) => new()
     {
         AppUserId = appUser.AppUserId,
         Ci = appUser.Ci,
         FullName = appUser.FullName,
-        Email = appUser.Email,
+        Username = appUser.Username,
         Phone = appUser.Phone,
         PastorId = appUser.PastorId,
-        MustChangePassword = appUser.MustChangePassword,
         PasswordChangedAt = appUser.PasswordChangedAt,
         FailedLoginAttempts = appUser.FailedLoginAttempts,
         LockedUntil = appUser.LockedUntil,

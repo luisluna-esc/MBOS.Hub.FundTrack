@@ -25,7 +25,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         {
             new(ClaimTypes.NameIdentifier, appUser.AppUserId.ToString()),
             new(ClaimTypes.Name, appUser.FullName),
-            new(ClaimTypes.Email, appUser.Email)
+            new("username", appUser.Username)
         };
 
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));

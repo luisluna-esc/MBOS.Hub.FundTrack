@@ -66,7 +66,6 @@ public class PasswordService : IPasswordService
         }
 
         appUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(changePasswordRequestDto.NewPassword);
-        appUser.MustChangePassword = false;
         appUser.PasswordChangedAt = DateTime.UtcNow;
 
         _unitOfWork.Repository<AppUser>().Update(appUser);
