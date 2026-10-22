@@ -29,31 +29,25 @@ Los archivos de despliegue están en los repos: `Dockerfile` y `.dockerignore` e
    PGPASSWORD='<clave del .env>' psql -h 127.0.0.1 -U fundtrack -d fundtrack -v ON_ERROR_STOP=1 -f /opt/fundtrack/backend/Scrips/migration_XX.sql
    ```
 
-3. Baja el código nuevo y reconstruye. Con `git` (la primera vez hay que clonar; después alcanza con `git pull`):
+3. Actualiza con un solo comando. `/opt/fundtrack/backend` y `/opt/fundtrack/frontend` son clones
+   de GitHub; el script baja lo último, construye las imágenes y cambia los contenedores (los
+   adjuntos y la configuración no se tocan):
 
    ```bash
-   cd /opt/fundtrack
-   rm -rf backend frontend   # solo la primera vez: hoy el código se subió sin .git
-   git clone https://github.com/luisluna-esc/MBOS.Hub.FundTrack.git backend
-   git clone https://github.com/luisluna-esc/MBOS.Hub.FundTrack.Web.git frontend
-   # las siguientes veces:  git -C backend pull && git -C frontend pull
-
-   docker build -t fundtrack-backend:latest backend
-   docker build -t fundtrack-frontend:latest frontend
+   bash /opt/fundtrack/backend/deploy.sh
    ```
 
-4. Cambia los contenedores (los adjuntos y la configuración no se tocan):
+4. Si prefieres hacerlo a mano, son los mismos pasos del script:
 
    ```bash
+   git -C /opt/fundtrack/backend pull && git -C /opt/fundtrack/frontend pull
+   docker build -t fundtrack-backend:latest /opt/fundtrack/backend
+   docker build -t fundtrack-frontend:latest /opt/fundtrack/frontend
    docker rm -f fundtrack-backend fundtrack-frontend
 
-   docker run -d --name fundtrack-backend --network fundtrack-net --restart unless-stopped \
-     --env-file /root/fundtrack-backend.env --add-host host.docker.internal:host-gateway \
-     -v /opt/fundtrack/data/attachments:/app/App_Data/attachments \
-     -p 127.0.0.1:5090:8080 fundtrack-backend:latest
+   docker run -d --name fundtrack-backend --network fundtrack-net --restart unless-stopped      --env-file /root/fundtrack-backend.env --add-host host.docker.internal:host-gateway      -v /opt/fundtrack/data/attachments:/app/App_Data/attachments      -p 127.0.0.1:5090:8080 fundtrack-backend:latest
 
-   docker run -d --name fundtrack-frontend --network fundtrack-net --restart unless-stopped \
-     -p 127.0.0.1:5091:80 fundtrack-frontend:latest
+   docker run -d --name fundtrack-frontend --network fundtrack-net --restart unless-stopped      -p 127.0.0.1:5091:80 fundtrack-frontend:latest
    ```
 
 5. Revisa que esté bien:
