@@ -157,8 +157,7 @@ public class LocalFundCountCorrectionService : ILocalFundCountCorrectionService
         var previousAmount = lastCorrectedAmount ?? correctionRequestDto.FieldName switch
         {
             CorrectionFields.AcmsBalance => count.AcmsBalance,
-            CorrectionFields.CashAmount => count.CashAmount,
-            _ => count.BankAmount
+            _ => count.TotalAmount
         };
 
         var correction = new LocalFundCountCorrection

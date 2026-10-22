@@ -19,8 +19,16 @@ public class LocalFundCountDto
     public string ChurchType { get; set; } = string.Empty;
     public string SubmissionStatus { get; set; } = string.Empty;
     public decimal AcmsBalance { get; set; }
-    public decimal CashAmount { get; set; }
-    public decimal BankAmount { get; set; }
+    public decimal BankStatementBalance { get; set; }
+    public decimal BankDeposit { get; set; }
+    public decimal LocalCash { get; set; }
+    public decimal UsdAmount { get; set; }
+    public decimal ExchangeRate { get; set; }
+    /// <summary>UsdAmount por ExchangeRate, redondeado a centavos.</summary>
+    public decimal UsdAmountBs { get; set; }
+    /// <summary>Suma de los documentos a rendir.</summary>
+    public decimal DocumentsTotal { get; set; }
+    /// <summary>Total fondos en custodia del tesorero.</summary>
     public decimal TotalAmount { get; set; }
     /// <summary>TotalAmount menos AcmsBalance: positivo si sobra dinero, negativo si falta.</summary>
     public decimal Difference { get; set; }

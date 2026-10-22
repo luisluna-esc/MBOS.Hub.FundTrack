@@ -50,9 +50,6 @@ public static class DependencyInjection
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.AddScoped(sp => sp.GetRequiredService<IOptions<JwtOptions>>().Value);
 
-        services.Configure<PasswordResetOptions>(configuration.GetSection("PasswordReset"));
-        services.AddScoped(sp => sp.GetRequiredService<IOptions<PasswordResetOptions>>().Value);
-
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         services.AddScoped<IRoleService, RoleService>();
@@ -70,8 +67,7 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
 
-        services.AddScoped<IPasswordResetService, PasswordResetService>();
-        services.AddScoped<IValidator<ResetPasswordRequestDto>, ResetPasswordRequestValidator>();
+        services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<IValidator<ChangePasswordRequestDto>, ChangePasswordRequestValidator>();
 
         services.Configure<AuditRetentionOptions>(configuration.GetSection("AuditRetention"));

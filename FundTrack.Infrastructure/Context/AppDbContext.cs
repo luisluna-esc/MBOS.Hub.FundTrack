@@ -30,6 +30,7 @@ public class AppDbContext : DbContext
     public DbSet<ChurchHistory> ChurchHistories => Set<ChurchHistory>();
     public DbSet<Period> Periods => Set<Period>();
     public DbSet<LocalFundCount> LocalFundCounts => Set<LocalFundCount>();
+    public DbSet<LocalFundCountDocument> LocalFundCountDocuments => Set<LocalFundCountDocument>();
     public DbSet<LocalFundCountAttachment> LocalFundCountAttachments => Set<LocalFundCountAttachment>();
     public DbSet<LocalFundCountCorrection> LocalFundCountCorrections => Set<LocalFundCountCorrection>();
     public DbSet<DifferenceFollowUp> DifferenceFollowUps => Set<DifferenceFollowUp>();

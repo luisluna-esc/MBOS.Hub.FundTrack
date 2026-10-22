@@ -4,8 +4,8 @@ namespace FundTrack.core.Constants;
 public static class CorrectionFields
 {
     public const string AcmsBalance = "acms_balance";
-    public const string CashAmount = "cash_amount";
-    public const string BankAmount = "bank_amount";
+    /// <summary>Total fondos en custodia del tesorero.</summary>
+    public const string TotalAmount = "total_amount";
 
-    public static readonly string[] All = [AcmsBalance, CashAmount, BankAmount];
+    public static readonly string[] All = [AcmsBalance, TotalAmount];
 }

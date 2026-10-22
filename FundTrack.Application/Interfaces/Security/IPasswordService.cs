@@ -3,9 +3,9 @@ using FundTrack.core.Entities.ResponseApi.DisplayFormat;
 
 namespace FundTrack.Application.Interfaces.Security;
 
-public interface IPasswordResetService
+// FundTrack no tiene "olvidé mi contraseña": M-BOS crea los usuarios con una contraseña temporal
+// y el usuario la cambia aquí (obligatorio al primer ingreso, MustChangePassword).
+public interface IPasswordService
 {
-    Task<ResponsePost> RequestReset(ForgotPasswordRequestDto forgotPasswordRequestDto);
-    Task<ResponsePost> ConfirmReset(ResetPasswordRequestDto resetPasswordRequestDto);
     Task<ResponsePost> ChangeMyPassword(ChangePasswordRequestDto changePasswordRequestDto);
 }

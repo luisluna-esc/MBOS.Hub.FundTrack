@@ -255,8 +255,13 @@ RETURNS TABLE (
     church_type VARCHAR,
     submission_status VARCHAR,
     acms_balance NUMERIC,
-    cash_amount NUMERIC,
-    bank_amount NUMERIC,
+    bank_statement_balance NUMERIC,
+    bank_deposit NUMERIC,
+    local_cash NUMERIC,
+    usd_amount NUMERIC,
+    exchange_rate NUMERIC,
+    usd_amount_bs NUMERIC,
+    documents_total NUMERIC,
     total_amount NUMERIC,
     difference NUMERIC,
     difference_status VARCHAR,
@@ -297,8 +302,13 @@ AS $$
         lfc.church_type,
         lfc.submission_status,
         lfc.acms_balance,
-        lfc.cash_amount,
-        lfc.bank_amount,
+        lfc.bank_statement_balance,
+        lfc.bank_deposit,
+        lfc.local_cash,
+        lfc.usd_amount,
+        lfc.exchange_rate,
+        lfc.usd_amount_bs,
+        lfc.documents_total,
         lfc.total_amount,
         lfc.difference,
         lfc.difference_status,
@@ -373,8 +383,13 @@ RETURNS TABLE (
     count_church_type VARCHAR,
     submission_status VARCHAR,
     acms_balance NUMERIC,
-    cash_amount NUMERIC,
-    bank_amount NUMERIC,
+    bank_statement_balance NUMERIC,
+    bank_deposit NUMERIC,
+    local_cash NUMERIC,
+    usd_amount NUMERIC,
+    exchange_rate NUMERIC,
+    usd_amount_bs NUMERIC,
+    documents_total NUMERIC,
     total_amount NUMERIC,
     difference NUMERIC,
     difference_status VARCHAR,
@@ -415,8 +430,13 @@ AS $$
         lfc.church_type AS count_church_type,
         lfc.submission_status,
         lfc.acms_balance,
-        lfc.cash_amount,
-        lfc.bank_amount,
+        lfc.bank_statement_balance,
+        lfc.bank_deposit,
+        lfc.local_cash,
+        lfc.usd_amount,
+        lfc.exchange_rate,
+        lfc.usd_amount_bs,
+        lfc.documents_total,
         lfc.total_amount,
         lfc.difference,
         lfc.difference_status,
@@ -556,7 +576,6 @@ RETURNS TABLE (
     not_submitted INT,
     missing INT,
     differences_pending INT,
-    differences_justified INT,
     differences_resolved INT,
     negative_acms INT,
     total_acms_balance NUMERIC,
@@ -591,7 +610,6 @@ AS $$
               WHERE sc.region_id = r.region_id
                 AND NOT EXISTS (SELECT 1 FROM local_fund_count x WHERE x.church_id = sc.church_id AND x.period_id = p_period_id)) AS INT) AS missing,
         CAST((SELECT COUNT(*) FROM period_counts k WHERE k.region_id = r.region_id AND k.difference_status = 'pending') AS INT) AS differences_pending,
-        CAST((SELECT COUNT(*) FROM period_counts k WHERE k.region_id = r.region_id AND k.difference_status = 'justified') AS INT) AS differences_justified,
         CAST((SELECT COUNT(*) FROM period_counts k WHERE k.region_id = r.region_id AND k.difference_status = 'resolved') AS INT) AS differences_resolved,
         CAST((SELECT COUNT(*) FROM period_counts k WHERE k.region_id = r.region_id AND k.acms_balance < 0) AS INT) AS negative_acms,
         COALESCE((SELECT SUM(k.acms_balance) FROM period_counts k WHERE k.region_id = r.region_id), 0) AS total_acms_balance,
@@ -679,7 +697,7 @@ $$;
 -- Reporte de pendientes de un mes: lo que se manda al cierre. Una fila
 -- por Iglesia/Grupo que todavía no registró arqueo ('missing'), que no
 -- lo presentó ('not_submitted') o que tiene una diferencia sin resolver
--- ('difference', en estado pending o justified).
+-- ('difference', todavía pendiente).
 -- ---------------------------------------------------------------------
 DROP FUNCTION IF EXISTS sp_report_pending;
 CREATE OR REPLACE FUNCTION sp_report_pending(
@@ -737,9 +755,483 @@ AS $$
       AND (c.status = 'active' OR lfc.local_fund_count_id IS NOT NULL)
       AND (lfc.local_fund_count_id IS NULL
            OR lfc.submission_status = 'not_submitted'
-           OR lfc.difference_status IN ('pending', 'justified'))
+           OR lfc.difference_status = 'pending')
       AND (p_restricted_district_id IS NULL OR d.district_id = p_restricted_district_id)
       AND (p_district_id IS NULL OR d.district_id = p_district_id)
       AND (p_region_id IS NULL OR r.region_id = p_region_id)
     ORDER BY r.name, d.name, c.name;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Reporte de diferencias: los arqueos presentados que no cuadran con el
+-- ACMS en un año, con su estado, la observación, el último seguimiento
+-- y cuándo se resolvió (el backend calcula cuántos días lleva abierta).
+-- ---------------------------------------------------------------------
+DROP FUNCTION IF EXISTS sp_report_differences;
+CREATE OR REPLACE FUNCTION sp_report_differences(
+    p_year INT,
+    p_status VARCHAR,
+    p_region_id BIGINT,
+    p_district_id BIGINT,
+    p_restricted_district_id BIGINT
+)
+RETURNS TABLE (
+    region_name VARCHAR,
+    district_name VARCHAR,
+    pastor_name TEXT,
+    church_code VARCHAR,
+    church_name VARCHAR,
+    church_type VARCHAR,
+    period_month INT,
+    acms_balance NUMERIC,
+    total_amount NUMERIC,
+    difference NUMERIC,
+    difference_status VARCHAR,
+    observation VARCHAR,
+    registered_at TIMESTAMPTZ,
+    last_follow_up_at TIMESTAMPTZ,
+    last_justification VARCHAR,
+    last_follow_up_by VARCHAR,
+    resolved_at TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT
+        r.name AS region_name,
+        d.name AS district_name,
+        (pa.last_names || ', ' || pa.first_names) AS pastor_name,
+        c.code AS church_code,
+        c.name AS church_name,
+        lfc.church_type,
+        pe.month AS period_month,
+        lfc.acms_balance,
+        lfc.total_amount,
+        lfc.difference,
+        lfc.difference_status,
+        lfc.observation,
+        lfc.created_at AT TIME ZONE 'UTC' AS registered_at,
+        lf.followed_up_at AT TIME ZONE 'UTC' AS last_follow_up_at,
+        lf.justification AS last_justification,
+        fu.full_name AS last_follow_up_by,
+        rs.followed_up_at AT TIME ZONE 'UTC' AS resolved_at
+    FROM local_fund_count lfc
+    JOIN church c ON c.church_id = lfc.church_id
+    JOIN period pe ON pe.period_id = lfc.period_id
+    JOIN district d ON d.district_id = lfc.district_id
+    JOIN region r ON r.region_id = d.region_id
+    LEFT JOIN pastor pa ON pa.pastor_id = lfc.pastor_id
+    LEFT JOIN LATERAL (
+        SELECT f.followed_up_at, f.justification, f.app_user_id
+        FROM difference_follow_up f
+        WHERE f.local_fund_count_id = lfc.local_fund_count_id
+        ORDER BY f.followed_up_at DESC, f.difference_follow_up_id DESC
+        LIMIT 1
+    ) lf ON TRUE
+    LEFT JOIN app_user fu ON fu.app_user_id = lf.app_user_id
+    LEFT JOIN LATERAL (
+        SELECT f.followed_up_at
+        FROM difference_follow_up f
+        WHERE f.local_fund_count_id = lfc.local_fund_count_id AND f.new_status = 'resolved'
+        ORDER BY f.followed_up_at DESC
+        LIMIT 1
+    ) rs ON TRUE
+    WHERE lfc.submission_status = 'submitted'
+      AND lfc.difference <> 0
+      AND pe.year = p_year
+      AND (p_status IS NULL OR lfc.difference_status = p_status)
+      AND (p_restricted_district_id IS NULL OR lfc.district_id = p_restricted_district_id)
+      AND (p_district_id IS NULL OR lfc.district_id = p_district_id)
+      AND (p_region_id IS NULL OR r.region_id = p_region_id)
+    ORDER BY r.name, d.name, c.name, pe.month;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Reporte de cumplimiento: por distrito y mes, cuántas Iglesias y Grupos
+-- debían registrar arqueo, cuántos se registraron, cuántos a tiempo (hasta
+-- la fecha límite del período, en hora de Bolivia), cuántos no
+-- presentaron y cuántos faltan.
+-- ---------------------------------------------------------------------
+DROP FUNCTION IF EXISTS sp_report_compliance;
+CREATE OR REPLACE FUNCTION sp_report_compliance(
+    p_year INT,
+    p_region_id BIGINT,
+    p_district_id BIGINT,
+    p_restricted_district_id BIGINT
+)
+RETURNS TABLE (
+    region_name VARCHAR,
+    district_name VARCHAR,
+    pastor_name TEXT,
+    period_month INT,
+    due_date DATE,
+    expected INT,
+    registered INT,
+    on_time INT,
+    not_submitted INT
+)
+LANGUAGE sql
+STABLE
+AS $$
+    WITH periods AS (
+        SELECT pe.period_id, pe.month, pe.due_date
+        FROM period pe
+        WHERE pe.year = p_year
+    ),
+    districts AS (
+        SELECT d.district_id, d.name, r.name AS region_name
+        FROM district d
+        JOIN region r ON r.region_id = d.region_id
+        WHERE (p_restricted_district_id IS NULL OR d.district_id = p_restricted_district_id)
+          AND (p_district_id IS NULL OR d.district_id = p_district_id)
+          AND (p_region_id IS NULL OR r.region_id = p_region_id)
+    ),
+    counts AS (
+        SELECT lfc.period_id, lfc.district_id, lfc.church_id, lfc.submission_status,
+               ((lfc.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/La_Paz')::date AS registered_on
+        FROM local_fund_count lfc
+        WHERE lfc.period_id IN (SELECT period_id FROM periods)
+    )
+    SELECT
+        di.region_name,
+        di.name AS district_name,
+        (pa.last_names || ', ' || pa.first_names) AS pastor_name,
+        p.month AS period_month,
+        p.due_date,
+        -- Las activas de hoy más las que ya no están activas pero tuvieron arqueo ese mes.
+        CAST((SELECT COUNT(*) FROM church c
+              WHERE c.district_id = di.district_id AND c.type <> 'Filial'
+                AND (c.status = 'active'
+                     OR EXISTS (SELECT 1 FROM counts k WHERE k.church_id = c.church_id AND k.period_id = p.period_id))) AS INT) AS expected,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.district_id = di.district_id AND k.period_id = p.period_id) AS INT) AS registered,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.district_id = di.district_id AND k.period_id = p.period_id
+                                            AND k.registered_on <= p.due_date) AS INT) AS on_time,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.district_id = di.district_id AND k.period_id = p.period_id
+                                            AND k.submission_status = 'not_submitted') AS INT) AS not_submitted
+    FROM districts di
+    CROSS JOIN periods p
+    LEFT JOIN district_pastor dp ON dp.district_id = di.district_id AND dp.end_date IS NULL
+    LEFT JOIN pastor pa ON pa.pastor_id = dp.pastor_id
+    ORDER BY di.region_name, di.name, p.month;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Reporte de saldo ACMS negativo: los arqueos de un rango de meses donde la
+-- iglesia gastó más de lo que tenía. El backend agrupa por iglesia y
+-- cuenta los meses seguidos.
+-- ---------------------------------------------------------------------
+DROP FUNCTION IF EXISTS sp_report_negative_acms;
+CREATE OR REPLACE FUNCTION sp_report_negative_acms(
+    p_year INT,
+    p_month_from INT,
+    p_month_to INT,
+    p_region_id BIGINT,
+    p_district_id BIGINT,
+    p_restricted_district_id BIGINT
+)
+RETURNS TABLE (
+    region_name VARCHAR,
+    district_name VARCHAR,
+    pastor_name TEXT,
+    church_id BIGINT,
+    church_code VARCHAR,
+    church_name VARCHAR,
+    church_type VARCHAR,
+    period_month INT,
+    acms_balance NUMERIC
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT
+        r.name AS region_name,
+        d.name AS district_name,
+        (pa.last_names || ', ' || pa.first_names) AS pastor_name,
+        c.church_id,
+        c.code AS church_code,
+        c.name AS church_name,
+        lfc.church_type,
+        pe.month AS period_month,
+        lfc.acms_balance
+    FROM local_fund_count lfc
+    JOIN church c ON c.church_id = lfc.church_id
+    JOIN period pe ON pe.period_id = lfc.period_id
+    JOIN district d ON d.district_id = lfc.district_id
+    JOIN region r ON r.region_id = d.region_id
+    LEFT JOIN pastor pa ON pa.pastor_id = lfc.pastor_id
+    WHERE lfc.acms_balance < 0
+      AND pe.year = p_year
+      AND pe.month BETWEEN p_month_from AND p_month_to
+      AND (p_restricted_district_id IS NULL OR lfc.district_id = p_restricted_district_id)
+      AND (p_district_id IS NULL OR lfc.district_id = p_district_id)
+      AND (p_region_id IS NULL OR r.region_id = p_region_id)
+    ORDER BY r.name, d.name, c.name, pe.month;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Resumen mensual por región: lo mismo que el Inicio (sp_get_dashboard_by_region)
+-- pero de un rango de meses en una sola consulta, una fila por mes y región.
+-- ---------------------------------------------------------------------
+DROP FUNCTION IF EXISTS sp_report_region_summary;
+CREATE OR REPLACE FUNCTION sp_report_region_summary(
+    p_year INT,
+    p_month_from INT,
+    p_month_to INT,
+    p_restricted_district_id BIGINT
+)
+RETURNS TABLE (
+    period_month INT,
+    region_name VARCHAR,
+    active_churches INT,
+    submitted INT,
+    not_submitted INT,
+    missing INT,
+    differences_pending INT,
+    differences_resolved INT,
+    negative_acms INT,
+    total_acms_balance NUMERIC,
+    total_counted NUMERIC,
+    total_difference NUMERIC
+)
+LANGUAGE sql
+STABLE
+AS $$
+    WITH periods AS (
+        SELECT pe.period_id, pe.month
+        FROM period pe
+        WHERE pe.year = p_year AND pe.month BETWEEN p_month_from AND p_month_to
+    ),
+    scoped_churches AS (
+        SELECT c.church_id, d.region_id
+        FROM church c
+        JOIN district d ON d.district_id = c.district_id
+        WHERE c.status = 'active'
+          AND c.type <> 'Filial'
+          AND (p_restricted_district_id IS NULL OR c.district_id = p_restricted_district_id)
+    ),
+    counts AS (
+        SELECT lfc.*, d.region_id
+        FROM local_fund_count lfc
+        JOIN district d ON d.district_id = lfc.district_id
+        WHERE lfc.period_id IN (SELECT period_id FROM periods)
+          AND (p_restricted_district_id IS NULL OR lfc.district_id = p_restricted_district_id)
+    )
+    SELECT
+        p.month AS period_month,
+        r.name AS region_name,
+        CAST((SELECT COUNT(*) FROM scoped_churches sc WHERE sc.region_id = r.region_id) AS INT) AS active_churches,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.region_id = r.region_id AND k.submission_status = 'submitted') AS INT) AS submitted,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.region_id = r.region_id AND k.submission_status = 'not_submitted') AS INT) AS not_submitted,
+        CAST((SELECT COUNT(*) FROM scoped_churches sc
+              WHERE sc.region_id = r.region_id
+                AND NOT EXISTS (SELECT 1 FROM local_fund_count x WHERE x.church_id = sc.church_id AND x.period_id = p.period_id)) AS INT) AS missing,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.region_id = r.region_id AND k.difference_status = 'pending') AS INT) AS differences_pending,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.region_id = r.region_id AND k.difference_status = 'resolved') AS INT) AS differences_resolved,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.region_id = r.region_id AND k.acms_balance < 0) AS INT) AS negative_acms,
+        COALESCE((SELECT SUM(k.acms_balance) FROM counts k WHERE k.period_id = p.period_id AND k.region_id = r.region_id), 0) AS total_acms_balance,
+        COALESCE((SELECT SUM(k.total_amount) FROM counts k WHERE k.period_id = p.period_id AND k.region_id = r.region_id), 0) AS total_counted,
+        COALESCE((SELECT SUM(k.difference) FROM counts k WHERE k.period_id = p.period_id AND k.region_id = r.region_id), 0) AS total_difference
+    FROM periods p
+    CROSS JOIN region r
+    WHERE EXISTS (SELECT 1 FROM scoped_churches sc WHERE sc.region_id = r.region_id)
+       OR EXISTS (SELECT 1 FROM counts k WHERE k.period_id = p.period_id AND k.region_id = r.region_id)
+    ORDER BY p.month, r.name;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Reporte de correcciones: lo que se corrigió de arqueos de meses cerrados,
+-- en qué período se aplicó, el monto anterior, el nuevo, el motivo y quién.
+-- ---------------------------------------------------------------------
+DROP FUNCTION IF EXISTS sp_report_corrections;
+CREATE OR REPLACE FUNCTION sp_report_corrections(
+    p_year INT,
+    p_region_id BIGINT,
+    p_district_id BIGINT,
+    p_restricted_district_id BIGINT
+)
+RETURNS TABLE (
+    registered_at TIMESTAMPTZ,
+    region_name VARCHAR,
+    district_name VARCHAR,
+    church_code VARCHAR,
+    church_name VARCHAR,
+    count_year INT,
+    count_month INT,
+    applied_year INT,
+    applied_month INT,
+    field_name VARCHAR,
+    previous_amount NUMERIC,
+    corrected_amount NUMERIC,
+    reason VARCHAR,
+    app_user_full_name VARCHAR
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT
+        cr.registered_at AT TIME ZONE 'UTC' AS registered_at,
+        r.name AS region_name,
+        d.name AS district_name,
+        c.code AS church_code,
+        c.name AS church_name,
+        cp.year AS count_year,
+        cp.month AS count_month,
+        ap.year AS applied_year,
+        ap.month AS applied_month,
+        cr.field_name,
+        cr.previous_amount,
+        cr.corrected_amount,
+        cr.reason,
+        u.full_name AS app_user_full_name
+    FROM local_fund_count_correction cr
+    JOIN local_fund_count lfc ON lfc.local_fund_count_id = cr.local_fund_count_id
+    JOIN church c ON c.church_id = lfc.church_id
+    JOIN period cp ON cp.period_id = lfc.period_id
+    JOIN period ap ON ap.period_id = cr.applied_period_id
+    JOIN district d ON d.district_id = lfc.district_id
+    JOIN region r ON r.region_id = d.region_id
+    LEFT JOIN app_user u ON u.app_user_id = cr.app_user_id
+    WHERE ap.year = p_year
+      AND (p_restricted_district_id IS NULL OR lfc.district_id = p_restricted_district_id)
+      AND (p_district_id IS NULL OR lfc.district_id = p_district_id)
+      AND (p_region_id IS NULL OR r.region_id = p_region_id)
+    ORDER BY cr.registered_at, c.name;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Reporte de movimientos de iglesias: del historial, las iglesias que se
+-- cerraron, fusionaron, cambiaron de distrito, de tipo o de nombre entre
+-- dos fechas. Región y distrito son los actuales de la iglesia.
+-- ---------------------------------------------------------------------
+DROP FUNCTION IF EXISTS sp_report_church_movements;
+CREATE OR REPLACE FUNCTION sp_report_church_movements(
+    p_date_from DATE,
+    p_date_to DATE,
+    p_change_type VARCHAR,
+    p_region_id BIGINT,
+    p_district_id BIGINT,
+    p_restricted_district_id BIGINT
+)
+RETURNS TABLE (
+    changed_at DATE,
+    change_type VARCHAR,
+    region_name VARCHAR,
+    district_name VARCHAR,
+    church_code VARCHAR,
+    church_name VARCHAR,
+    church_type VARCHAR,
+    old_value VARCHAR,
+    new_value VARCHAR,
+    reason VARCHAR,
+    app_user_full_name VARCHAR
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT
+        h.changed_at,
+        h.change_type,
+        r.name AS region_name,
+        d.name AS district_name,
+        c.code AS church_code,
+        c.name AS church_name,
+        c.type AS church_type,
+        h.old_value,
+        h.new_value,
+        h.reason,
+        u.full_name AS app_user_full_name
+    FROM church_history h
+    JOIN church c ON c.church_id = h.church_id
+    JOIN district d ON d.district_id = c.district_id
+    JOIN region r ON r.region_id = d.region_id
+    LEFT JOIN app_user u ON u.app_user_id = h.app_user_id
+    WHERE h.changed_at BETWEEN p_date_from AND p_date_to
+      AND (p_change_type IS NULL OR h.change_type = p_change_type)
+      AND (p_restricted_district_id IS NULL OR c.district_id = p_restricted_district_id)
+      AND (p_district_id IS NULL OR c.district_id = p_district_id)
+      AND (p_region_id IS NULL OR r.region_id = p_region_id)
+    ORDER BY h.changed_at, c.name;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Resumen mensual por distrito: lo mismo que sp_report_region_summary pero
+-- una fila por mes y distrito (con su región y pastor actual). Lo usa el
+-- reporte "Resumen" cuando se agrupa por distrito.
+-- ---------------------------------------------------------------------
+DROP FUNCTION IF EXISTS sp_report_district_summary;
+CREATE OR REPLACE FUNCTION sp_report_district_summary(
+    p_year INT,
+    p_month_from INT,
+    p_month_to INT,
+    p_region_id BIGINT,
+    p_restricted_district_id BIGINT
+)
+RETURNS TABLE (
+    period_month INT,
+    region_name VARCHAR,
+    district_name VARCHAR,
+    pastor_name TEXT,
+    active_churches INT,
+    submitted INT,
+    not_submitted INT,
+    missing INT,
+    differences_pending INT,
+    differences_resolved INT,
+    negative_acms INT,
+    total_acms_balance NUMERIC,
+    total_counted NUMERIC,
+    total_difference NUMERIC
+)
+LANGUAGE sql
+STABLE
+AS $$
+    WITH periods AS (
+        SELECT pe.period_id, pe.month
+        FROM period pe
+        WHERE pe.year = p_year AND pe.month BETWEEN p_month_from AND p_month_to
+    ),
+    districts AS (
+        SELECT d.district_id, d.name, r.name AS region_name
+        FROM district d
+        JOIN region r ON r.region_id = d.region_id
+        WHERE (p_restricted_district_id IS NULL OR d.district_id = p_restricted_district_id)
+          AND (p_region_id IS NULL OR r.region_id = p_region_id)
+    ),
+    scoped_churches AS (
+        SELECT c.church_id, c.district_id
+        FROM church c
+        WHERE c.status = 'active'
+          AND c.type <> 'Filial'
+          AND c.district_id IN (SELECT district_id FROM districts)
+    ),
+    counts AS (
+        SELECT lfc.*
+        FROM local_fund_count lfc
+        WHERE lfc.period_id IN (SELECT period_id FROM periods)
+          AND lfc.district_id IN (SELECT district_id FROM districts)
+    )
+    SELECT
+        p.month AS period_month,
+        di.region_name,
+        di.name AS district_name,
+        (pa.last_names || ', ' || pa.first_names) AS pastor_name,
+        CAST((SELECT COUNT(*) FROM scoped_churches sc WHERE sc.district_id = di.district_id) AS INT) AS active_churches,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.district_id = di.district_id AND k.submission_status = 'submitted') AS INT) AS submitted,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.district_id = di.district_id AND k.submission_status = 'not_submitted') AS INT) AS not_submitted,
+        CAST((SELECT COUNT(*) FROM scoped_churches sc
+              WHERE sc.district_id = di.district_id
+                AND NOT EXISTS (SELECT 1 FROM local_fund_count x WHERE x.church_id = sc.church_id AND x.period_id = p.period_id)) AS INT) AS missing,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.district_id = di.district_id AND k.difference_status = 'pending') AS INT) AS differences_pending,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.district_id = di.district_id AND k.difference_status = 'resolved') AS INT) AS differences_resolved,
+        CAST((SELECT COUNT(*) FROM counts k WHERE k.period_id = p.period_id AND k.district_id = di.district_id AND k.acms_balance < 0) AS INT) AS negative_acms,
+        COALESCE((SELECT SUM(k.acms_balance) FROM counts k WHERE k.period_id = p.period_id AND k.district_id = di.district_id), 0) AS total_acms_balance,
+        COALESCE((SELECT SUM(k.total_amount) FROM counts k WHERE k.period_id = p.period_id AND k.district_id = di.district_id), 0) AS total_counted,
+        COALESCE((SELECT SUM(k.difference) FROM counts k WHERE k.period_id = p.period_id AND k.district_id = di.district_id), 0) AS total_difference
+    FROM periods p
+    CROSS JOIN districts di
+    LEFT JOIN district_pastor dp ON dp.district_id = di.district_id AND dp.end_date IS NULL
+    LEFT JOIN pastor pa ON pa.pastor_id = dp.pastor_id
+    WHERE EXISTS (SELECT 1 FROM scoped_churches sc WHERE sc.district_id = di.district_id)
+       OR EXISTS (SELECT 1 FROM counts k WHERE k.period_id = p.period_id AND k.district_id = di.district_id)
+    ORDER BY p.month, di.region_name, di.name;
 $$;

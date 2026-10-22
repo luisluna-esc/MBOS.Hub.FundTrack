@@ -5,17 +5,19 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FundTrack.Web.Controllers;
 
+// Sin "olvidé mi contraseña": M-BOS crea los usuarios con contraseña temporal y el usuario
+// la cambia con change-password (obligatorio al primer ingreso).
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
-    private readonly IPasswordResetService _passwordResetService;
+    private readonly IPasswordService _passwordService;
 
-    public AuthController(IAuthService authService, IPasswordResetService passwordResetService)
+    public AuthController(IAuthService authService, IPasswordService passwordService)
     {
         _authService = authService;
-        _passwordResetService = passwordResetService;
+        _passwordService = passwordService;
     }
 
     [HttpPost("login")]
@@ -39,25 +41,11 @@ public class AuthController : ControllerBase
         return StatusCode((int)result.StatusCode, result);
     }
 
-    [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto forgotPasswordRequestDto)
-    {
-        var result = await _passwordResetService.RequestReset(forgotPasswordRequestDto);
-        return StatusCode((int)result.StatusCode, result);
-    }
-
-    [HttpPost("reset-password")]
-    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto resetPasswordRequestDto)
-    {
-        var result = await _passwordResetService.ConfirmReset(resetPasswordRequestDto);
-        return StatusCode((int)result.StatusCode, result);
-    }
-
     [Authorize]
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto changePasswordRequestDto)
     {
-        var result = await _passwordResetService.ChangeMyPassword(changePasswordRequestDto);
+        var result = await _passwordService.ChangeMyPassword(changePasswordRequestDto);
         return StatusCode((int)result.StatusCode, result);
     }
 }

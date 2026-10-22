@@ -11,8 +11,15 @@ public class LocalFundCount
     public string ChurchType { get; set; } = string.Empty;
     public string SubmissionStatus { get; set; } = string.Empty;
     public decimal AcmsBalance { get; set; }
-    public decimal CashAmount { get; set; }
-    public decimal BankAmount { get; set; }
+    // Arqueo del tesorero: extracto + depósito + billetes y monedas + dólares en Bs + documentos.
+    public decimal BankStatementBalance { get; set; }
+    public decimal BankDeposit { get; set; }
+    public decimal LocalCash { get; set; }
+    public decimal UsdAmount { get; set; }
+    public decimal ExchangeRate { get; set; }
+    public decimal UsdAmountBs { get; set; }
+    public decimal DocumentsTotal { get; set; }
+    /// <summary>Total fondos en custodia del tesorero: la suma de todo lo anterior.</summary>
     public decimal TotalAmount { get; set; }
     public decimal Difference { get; set; }
     public string? DifferenceStatus { get; set; }
@@ -26,4 +33,6 @@ public class LocalFundCount
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public long? UpdatedById { get; set; }
     public DateTime? UpdatedAt { get; set; }
+
+    public List<LocalFundCountDocument> Documents { get; set; } = [];
 }

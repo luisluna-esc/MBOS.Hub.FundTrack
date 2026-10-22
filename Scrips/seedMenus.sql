@@ -14,6 +14,7 @@ SELECT v.name, v.translation_key, NULL, v.icon, NULL, v.display_order, TRUE
 FROM (VALUES
     ('Arqueos', 'nav.funds', 'cash', 2),
     ('Catálogos', 'nav.catalogs', 'catalog', 3),
+    ('Reportes', 'nav.reports', 'report', 4),
     ('Administración', 'nav.admin', 'settings', 99)
 ) AS v(name, translation_key, icon, display_order)
 WHERE NOT EXISTS (SELECT 1 FROM menu m WHERE m.name = v.name AND m.parent_menu_id IS NULL);
@@ -29,6 +30,15 @@ JOIN (VALUES
     ('Catálogos', 'Pastores', 'nav.pastors', '/catalogs/pastors', 'user', 3),
     ('Catálogos', 'Iglesias', 'nav.churches', '/catalogs/churches', 'church', 4),
     ('Catálogos', 'Períodos', 'nav.periods', '/catalogs/periods', 'calendar', 5),
+    ('Reportes', 'Arqueo del fondo local', 'nav.reportLocalFundCount', '/reports/local-fund-count', 'report', 0),
+    ('Reportes', 'Fondo Local anual', 'nav.reportLocalFund', '/reports/local-fund', 'report', 1),
+    ('Reportes', 'Pendientes del mes', 'nav.reportPending', '/reports/pending', 'report', 2),
+    ('Reportes', 'Diferencias por estado', 'nav.reportDifferences', '/reports/differences', 'report', 3),
+    ('Reportes', 'Cumplimiento', 'nav.reportCompliance', '/reports/compliance', 'report', 4),
+    ('Reportes', 'Saldo ACMS negativo', 'nav.reportNegativeAcms', '/reports/negative-acms', 'report', 5),
+    ('Reportes', 'Resumen por región', 'nav.reportRegionSummary', '/reports/region-summary', 'report', 6),
+    ('Reportes', 'Correcciones', 'nav.reportCorrections', '/reports/corrections', 'report', 7),
+    ('Reportes', 'Movimientos de iglesias', 'nav.reportChurchMovements', '/reports/church-movements', 'report', 8),
     ('Administración', 'Usuarios', 'nav.users', '/admin/users', 'users', 1),
     ('Administración', 'Roles', 'nav.roles', '/admin/roles', 'shield', 2),
     ('Administración', 'Auditoría', 'nav.auditLogs', '/admin/audit-logs', 'history', 3)

@@ -44,12 +44,32 @@ public class LocalFundCountConfiguration : IEntityTypeConfiguration<LocalFundCou
               .HasColumnName("acms_balance")
               .HasPrecision(14, 2);
 
-        entity.Property(e => e.CashAmount)
-              .HasColumnName("cash_amount")
+        entity.Property(e => e.BankStatementBalance)
+              .HasColumnName("bank_statement_balance")
               .HasPrecision(14, 2);
 
-        entity.Property(e => e.BankAmount)
-              .HasColumnName("bank_amount")
+        entity.Property(e => e.BankDeposit)
+              .HasColumnName("bank_deposit")
+              .HasPrecision(14, 2);
+
+        entity.Property(e => e.LocalCash)
+              .HasColumnName("local_cash")
+              .HasPrecision(14, 2);
+
+        entity.Property(e => e.UsdAmount)
+              .HasColumnName("usd_amount")
+              .HasPrecision(14, 2);
+
+        entity.Property(e => e.ExchangeRate)
+              .HasColumnName("exchange_rate")
+              .HasPrecision(10, 4);
+
+        entity.Property(e => e.UsdAmountBs)
+              .HasColumnName("usd_amount_bs")
+              .HasPrecision(14, 2);
+
+        entity.Property(e => e.DocumentsTotal)
+              .HasColumnName("documents_total")
               .HasPrecision(14, 2);
 
         entity.Property(e => e.TotalAmount)
@@ -99,5 +119,10 @@ public class LocalFundCountConfiguration : IEntityTypeConfiguration<LocalFundCou
         entity.Property(e => e.UpdatedAt)
               .HasColumnName("updated_at")
               .HasColumnType("timestamp without time zone");
+
+        entity.HasMany(e => e.Documents)
+              .WithOne()
+              .HasForeignKey(d => d.LocalFundCountId)
+              .OnDelete(DeleteBehavior.Cascade);
     }
 }

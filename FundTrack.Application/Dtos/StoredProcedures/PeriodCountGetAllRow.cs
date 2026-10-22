@@ -25,8 +25,13 @@ public class PeriodCountGetAllRow
     public string? CountChurchType { get; set; }
     public string? SubmissionStatus { get; set; }
     public decimal? AcmsBalance { get; set; }
-    public decimal? CashAmount { get; set; }
-    public decimal? BankAmount { get; set; }
+    public decimal? BankStatementBalance { get; set; }
+    public decimal? BankDeposit { get; set; }
+    public decimal? LocalCash { get; set; }
+    public decimal? UsdAmount { get; set; }
+    public decimal? ExchangeRate { get; set; }
+    public decimal? UsdAmountBs { get; set; }
+    public decimal? DocumentsTotal { get; set; }
     public decimal? TotalAmount { get; set; }
     public decimal? Difference { get; set; }
     public string? DifferenceStatus { get; set; }

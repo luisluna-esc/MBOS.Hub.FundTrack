@@ -261,9 +261,9 @@ public partial class ReportService : IReportService
                                 {
                                     if (month is null)
                                     {
-                                        table.Cell().Element(BodyCell).Text("");
-                                        table.Cell().Element(BodyCell).Text("");
-                                        table.Cell().Element(BodyCell).Text("");
+                                        // Así se ve de un vistazo qué iglesias faltan cada mes.
+                                        table.Cell().ColumnSpan(3).Element(BodyCell).AlignCenter()
+                                            .Text("Sin arqueo").Italic().FontColor(Colors.Grey.Darken1);
                                         continue;
                                     }
 
@@ -305,6 +305,11 @@ public partial class ReportService : IReportService
         return document.GeneratePdf();
     }
 
+    /// <summary>
+    /// Fila de totales en dinero y, debajo, cuántas iglesias presentaron su arqueo ese mes de
+    /// cuántas hay en el grupo (por ejemplo "8 de 10"). Las que faltan se ven en su fila como
+    /// "Sin arqueo" o "No presentó".
+    /// </summary>
     private static void AddTotalsRow(TableDescriptor table, string label, IEnumerable<LocalFundYearChurchDto> churches, int monthCount, Func<IContainer, IContainer> style)
     {
         var list = churches.ToList();
@@ -316,6 +321,15 @@ public partial class ReportService : IReportService
             table.Cell().Element(style).AlignRight().Text(Money(monthValues.Sum(m => m!.AcmsBalance))).Bold();
             table.Cell().Element(style).AlignRight().Text(Money(monthValues.Where(m => m!.SubmissionStatus != SubmissionStatuses.NotSubmitted).Sum(m => m!.TotalAmount))).Bold();
             table.Cell().Element(style).AlignRight().Text(Money(monthValues.Sum(m => m!.Difference))).Bold();
+        }
+
+        table.Cell().ColumnSpan(5).Element(style).AlignRight().Text("Presentaron su arqueo").Italic();
+        for (var i = 0; i < monthCount; i++)
+        {
+            var presented = list.Count(c => c.Months[i]?.SubmissionStatus == SubmissionStatuses.Submitted);
+            var cell = table.Cell().ColumnSpan(3).Element(style).AlignCenter().Text($"{presented} de {list.Count}").Bold();
+            if (presented < list.Count)
+                cell.FontColor(presented * 2 < list.Count ? DangerColor : "#B45309");
         }
     }
 
@@ -540,10 +554,10 @@ public partial class ReportService : IReportService
     private async Task<string> CurrentUserFullNameAsync()
     {
         if (!_currentUserService.AppUserId.HasValue)
-            return "—";
+            return "";
 
         var user = await _unitOfWork.Repository<AppUser>().GetByIdAsync(_currentUserService.AppUserId.Value);
-        return user?.FullName ?? "—";
+        return user?.FullName ?? "";
     }
 
     private static string Money(decimal value) => value.ToString("N2", ReportCulture);
@@ -559,7 +573,6 @@ public partial class ReportService : IReportService
     private static string DifferenceStatusLabel(string? status) => status switch
     {
         DifferenceStatuses.Pending => "Pendiente",
-        DifferenceStatuses.Justified => "Justificada",
         DifferenceStatuses.Resolved => "Resuelta",
         DifferenceStatuses.None => "Sin diferencia",
         _ => ""

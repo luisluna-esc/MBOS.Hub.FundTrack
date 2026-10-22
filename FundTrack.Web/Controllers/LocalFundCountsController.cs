@@ -44,6 +44,13 @@ public class LocalFundCountsController : ControllerBase
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpGet("{id}/documents")]
+    public async Task<IActionResult> GetDocuments(long id)
+    {
+        var result = await _localFundCountService.GetDocuments(id);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpGet("by-period/{periodId}")]
     public async Task<IActionResult> GetByPeriod(long periodId, [FromQuery] long? regionId, [FromQuery] long? districtId)
     {

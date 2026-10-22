@@ -14,8 +14,8 @@ public class LocalFundCountCorrectionRequestValidator : AbstractValidator<LocalF
 
         RuleFor(x => x.CorrectedAmount)
             .GreaterThanOrEqualTo(0)
-            .When(x => x.FieldName is CorrectionFields.CashAmount or CorrectionFields.BankAmount)
-            .WithMessage("CorrectedAmount must not be negative for cash or bank amounts.");
+            .When(x => x.FieldName == CorrectionFields.TotalAmount)
+            .WithMessage("CorrectedAmount must not be negative for the total in custody.");
 
         RuleFor(x => x.Reason)
             .NotEmpty().WithMessage("Reason is required.")

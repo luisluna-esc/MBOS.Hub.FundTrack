@@ -9,8 +9,8 @@ public class DifferenceFollowUpRequestValidator : AbstractValidator<DifferenceFo
     public DifferenceFollowUpRequestValidator()
     {
         RuleFor(x => x.NewStatus)
-            .Must(status => status is DifferenceStatuses.Justified or DifferenceStatuses.Resolved)
-            .WithMessage($"NewStatus must be '{DifferenceStatuses.Justified}' or '{DifferenceStatuses.Resolved}'.");
+            .Must(status => status == DifferenceStatuses.Resolved)
+            .WithMessage($"NewStatus must be '{DifferenceStatuses.Resolved}'.");
 
         RuleFor(x => x.Justification)
             .NotEmpty().WithMessage("Justification is required.")

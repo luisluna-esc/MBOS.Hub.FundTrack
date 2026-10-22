@@ -43,7 +43,7 @@ public class LocalFundCountService : ILocalFundCountService
         _fileStorage = fileStorage;
     }
 
-    private const string GetLocalFundCountsSql = """
+    internal const string GetLocalFundCountsSql = """
         SELECT
             local_fund_count_id AS "LocalFundCountId",
             church_id AS "ChurchId",
@@ -62,8 +62,13 @@ public class LocalFundCountService : ILocalFundCountService
             church_type AS "ChurchType",
             submission_status AS "SubmissionStatus",
             acms_balance AS "AcmsBalance",
-            cash_amount AS "CashAmount",
-            bank_amount AS "BankAmount",
+            bank_statement_balance AS "BankStatementBalance",
+            bank_deposit AS "BankDeposit",
+            local_cash AS "LocalCash",
+            usd_amount AS "UsdAmount",
+            exchange_rate AS "ExchangeRate",
+            usd_amount_bs AS "UsdAmountBs",
+            documents_total AS "DocumentsTotal",
             total_amount AS "TotalAmount",
             difference AS "Difference",
             difference_status AS "DifferenceStatus",
@@ -107,8 +112,13 @@ public class LocalFundCountService : ILocalFundCountService
             count_church_type AS "CountChurchType",
             submission_status AS "SubmissionStatus",
             acms_balance AS "AcmsBalance",
-            cash_amount AS "CashAmount",
-            bank_amount AS "BankAmount",
+            bank_statement_balance AS "BankStatementBalance",
+            bank_deposit AS "BankDeposit",
+            local_cash AS "LocalCash",
+            usd_amount AS "UsdAmount",
+            exchange_rate AS "ExchangeRate",
+            usd_amount_bs AS "UsdAmountBs",
+            documents_total AS "DocumentsTotal",
             total_amount AS "TotalAmount",
             difference AS "Difference",
             difference_status AS "DifferenceStatus",
@@ -207,6 +217,42 @@ public class LocalFundCountService : ILocalFundCountService
         };
     }
 
+    public async Task<ResponseGetObject> GetDocuments(long id)
+    {
+        // Mismo alcance que el arqueo: un Pastor solo ve los de su distrito.
+        var exists = await QueryLocalFundCounts(new LocalFundCountQueryFilter { LocalFundCountId = id }, null, 1, 1);
+        if (exists.Count == 0)
+        {
+            return new ResponseGetObject
+            {
+                Data = new(),
+                Messages = [new Message { Type = MessageType.Error, Description = "Local fund count not found." }],
+                StatusCode = HttpStatusCode.NotFound
+            };
+        }
+
+        var documents = await _unitOfWork.Repository<LocalFundCountDocument>().Query()
+            .Where(d => d.LocalFundCountId == id)
+            .OrderBy(d => d.DocumentDate).ThenBy(d => d.LocalFundCountDocumentId)
+            .Select(d => new LocalFundCountDocumentDto
+            {
+                LocalFundCountDocumentId = d.LocalFundCountDocumentId,
+                LocalFundCountId = d.LocalFundCountId,
+                DocumentDate = d.DocumentDate,
+                DocumentNumber = d.DocumentNumber,
+                Detail = d.Detail,
+                Amount = d.Amount
+            })
+            .ToListAsync();
+
+        return new ResponseGetObject
+        {
+            Data = documents,
+            Messages = [],
+            StatusCode = HttpStatusCode.OK
+        };
+    }
+
     private async Task<List<LocalFundCountGetAllRow>> QueryLocalFundCounts(
         LocalFundCountQueryFilter filter, string? searchCriteria, int pageNumber, int pageSize)
     {
@@ -259,8 +305,13 @@ public class LocalFundCountService : ILocalFundCountService
             ChurchType = row.CountChurchType ?? row.ChurchType,
             SubmissionStatus = row.SubmissionStatus ?? string.Empty,
             AcmsBalance = row.AcmsBalance ?? 0,
-            CashAmount = row.CashAmount ?? 0,
-            BankAmount = row.BankAmount ?? 0,
+            BankStatementBalance = row.BankStatementBalance ?? 0,
+            BankDeposit = row.BankDeposit ?? 0,
+            LocalCash = row.LocalCash ?? 0,
+            UsdAmount = row.UsdAmount ?? 0,
+            ExchangeRate = row.ExchangeRate ?? 0,
+            UsdAmountBs = row.UsdAmountBs ?? 0,
+            DocumentsTotal = row.DocumentsTotal ?? 0,
             TotalAmount = row.TotalAmount ?? 0,
             Difference = row.Difference ?? 0,
             DifferenceStatus = row.DifferenceStatus,
@@ -364,6 +415,7 @@ public class LocalFundCountService : ILocalFundCountService
         };
 
         ApplyAmounts(count, localFundCountRequestDto);
+        count.Documents = NewDocuments(localFundCountRequestDto);
 
         await _unitOfWork.Repository<LocalFundCount>().AddAsync(count);
         await _unitOfWork.SaveChangesAsync();
@@ -425,6 +477,18 @@ public class LocalFundCountService : ILocalFundCountService
         count.UpdatedAt = DateTime.UtcNow;
 
         ApplyAmounts(count, localFundCountRequestDto);
+
+        // Los documentos se reemplazan completos: es más simple que comparar uno por uno.
+        var documentRepository = _unitOfWork.Repository<LocalFundCountDocument>();
+        foreach (var document in await documentRepository.Query().Where(d => d.LocalFundCountId == id).ToListAsync())
+        {
+            documentRepository.Remove(document);
+        }
+        foreach (var document in NewDocuments(localFundCountRequestDto))
+        {
+            document.LocalFundCountId = id;
+            await documentRepository.AddAsync(document);
+        }
 
         repository.Update(count);
         await _unitOfWork.SaveChangesAsync();
@@ -489,8 +553,8 @@ public class LocalFundCountService : ILocalFundCountService
     }
 
     /// <summary>
-    /// Calcula total y diferencia en el servidor, sin redondear: el sistema registra exactamente
-    /// lo que se contó. La diferencia es arqueo menos ACMS (positiva si sobra, negativa si falta).
+    /// Calcula en el servidor los dólares en Bs, el total de documentos, el total en custodia y la
+    /// diferencia (total en custodia menos ACMS: positiva si sobra, negativa si falta).
     /// </summary>
     private static void ApplyAmounts(LocalFundCount count, LocalFundCountRequestDto request)
     {
@@ -498,27 +562,39 @@ public class LocalFundCountService : ILocalFundCountService
         count.AcmsBalance = request.AcmsBalance;
         count.SignedByPastor = request.SignedByPastor;
         count.SignedByElder = request.SignedByElder;
-        count.Observation = request.Observation;
 
         if (request.SubmissionStatus == SubmissionStatuses.NotSubmitted)
         {
-            count.CashAmount = 0;
-            count.BankAmount = 0;
+            count.BankStatementBalance = 0;
+            count.BankDeposit = 0;
+            count.LocalCash = 0;
+            count.UsdAmount = 0;
+            count.ExchangeRate = 0;
+            count.UsdAmountBs = 0;
+            count.DocumentsTotal = 0;
             count.TotalAmount = 0;
             count.Difference = 0;
             count.DifferenceStatus = DifferenceStatuses.None;
             count.CountDate = null;
+            count.Observation = null;
             return;
         }
 
-        count.CashAmount = request.CashAmount;
-        count.BankAmount = request.BankAmount;
-        count.TotalAmount = request.CashAmount + request.BankAmount;
+        count.BankStatementBalance = request.BankStatementBalance;
+        count.BankDeposit = request.BankDeposit;
+        count.LocalCash = request.LocalCash;
+        count.UsdAmount = request.UsdAmount;
+        count.ExchangeRate = request.UsdAmount > 0 ? request.ExchangeRate : 0;
+        count.UsdAmountBs = UsdInBs(request);
+        count.DocumentsTotal = request.Documents.Sum(d => d.Amount);
+        count.TotalAmount = TotalInCustody(request);
         count.Difference = count.TotalAmount - request.AcmsBalance;
         count.CountDate = request.CountDate;
+        // La observación explica la diferencia: si el arqueo cuadra, no se guarda.
+        count.Observation = count.Difference == 0 ? null : request.Observation?.Trim();
 
         // Si la diferencia desaparece se limpia el estado; si aparece, queda pendiente. Si ya
-        // estaba en seguimiento (justificada o resuelta) se respeta ese avance.
+        // ya estaba resuelta se respeta.
         if (count.Difference == 0)
         {
             count.DifferenceStatus = DifferenceStatuses.None;
@@ -528,6 +604,26 @@ public class LocalFundCountService : ILocalFundCountService
             count.DifferenceStatus = DifferenceStatuses.Pending;
         }
     }
+
+    /// <summary>Dólares pasados a Bs, redondeados a centavos (igual que en el formulario).</summary>
+    public static decimal UsdInBs(LocalFundCountRequestDto request) =>
+        request.UsdAmount > 0 ? Math.Round(request.UsdAmount * request.ExchangeRate, 2, MidpointRounding.AwayFromZero) : 0;
+
+    /// <summary>Total fondos en custodia del tesorero: los 4 montos más los documentos a rendir.</summary>
+    public static decimal TotalInCustody(LocalFundCountRequestDto request) =>
+        request.BankStatementBalance + request.BankDeposit + request.LocalCash + UsdInBs(request) + request.Documents.Sum(d => d.Amount);
+
+    /// <summary>Si no presentó, no hay documentos.</summary>
+    private static List<LocalFundCountDocument> NewDocuments(LocalFundCountRequestDto request) =>
+        request.SubmissionStatus == SubmissionStatuses.NotSubmitted
+            ? []
+            : request.Documents.Select(d => new LocalFundCountDocument
+            {
+                DocumentDate = d.DocumentDate,
+                DocumentNumber = string.IsNullOrWhiteSpace(d.DocumentNumber) ? null : d.DocumentNumber.Trim(),
+                Detail = d.Detail.Trim(),
+                Amount = d.Amount
+            }).ToList();
 
     private async Task<bool> IsPeriodClosed(long periodId) =>
         await _unitOfWork.Repository<Period>().Query()

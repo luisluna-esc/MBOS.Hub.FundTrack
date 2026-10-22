@@ -70,7 +70,13 @@ public partial class ReportService
             {
                 var month = church.Months[i];
                 if (month is null)
+                {
+                    var missing = sheet.Cell(rowIndex, fixedColumns + i * 3 + 2);
+                    missing.Value = "Sin arqueo";
+                    missing.Style.Font.Italic = true;
+                    missing.Style.Font.FontColor = XLColor.Gray;
                     continue;
+                }
 
                 var first = fixedColumns + i * 3 + 1;
                 SetMoney(sheet.Cell(rowIndex, first), month.AcmsBalance);
@@ -100,6 +106,27 @@ public partial class ReportService
         for (var c = fixedColumns + 1; c <= columnCount; c++)
         {
             WriteSubtotal(sheet, rowIndex, c, firstDataRow, lastDataRow);
+        }
+        StyleTotals(sheet.Range(rowIndex, 1, rowIndex, columnCount));
+
+        // Cuántas presentaron su arqueo cada mes: la Diferencia solo se llena cuando la iglesia
+        // presentó, así que contar esa columna da las que presentaron; SUBTOTAL(3, ...) cuenta solo
+        // las filas visibles, igual que los totales, y la columna Iglesia da cuántas hay.
+        rowIndex++;
+        sheet.Cell(rowIndex, fixedColumns - 2).Value = "Presentaron su arqueo";
+        if (lastDataRow >= firstDataRow)
+        {
+            var churchColumn = $"{sheet.Cell(firstDataRow, 5).Address.ToStringRelative()}:{sheet.Cell(lastDataRow, 5).Address.ToStringRelative()}";
+            for (var i = 0; i < months.Count; i++)
+            {
+                var diffColumn = fixedColumns + i * 3 + 3;
+                var first = sheet.Cell(firstDataRow, diffColumn).Address.ToStringRelative();
+                var last = sheet.Cell(lastDataRow, diffColumn).Address.ToStringRelative();
+                var cell = sheet.Cell(rowIndex, fixedColumns + i * 3 + 1);
+                sheet.Range(rowIndex, fixedColumns + i * 3 + 1, rowIndex, fixedColumns + i * 3 + 3).Merge();
+                cell.FormulaA1 = $"SUBTOTAL(3,{first}:{last})&\" de \"&SUBTOTAL(3,{churchColumn})";
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            }
         }
         StyleTotals(sheet.Range(rowIndex, 1, rowIndex, columnCount));
 
@@ -234,7 +261,7 @@ public partial class ReportService
     {
         var lines = new List<string>
         {
-            "IGLESIA ADVENTISTA DEL SÉPTIMO DÍA — MISIÓN BOLIVIANA OCCIDENTAL SUR — LA PAZ - BOLIVIA",
+            "IGLESIA ADVENTISTA DEL SÉPTIMO DÍA, MISIÓN BOLIVIANA OCCIDENTAL SUR, LA PAZ, BOLIVIA",
             title
         };
         lines.AddRange(info.Where(l => !string.IsNullOrWhiteSpace(l)));

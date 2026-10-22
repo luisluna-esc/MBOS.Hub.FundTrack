@@ -14,7 +14,6 @@ public class DashboardRegionRowDto
     /// <summary>Iglesias activas que todavía no tienen arqueo registrado ese mes.</summary>
     public int Missing { get; set; }
     public int DifferencesPending { get; set; }
-    public int DifferencesJustified { get; set; }
     public int DifferencesResolved { get; set; }
     /// <summary>Arqueos con saldo ACMS negativo: la iglesia gastó más de lo que tenía.</summary>
     public int NegativeAcms { get; set; }

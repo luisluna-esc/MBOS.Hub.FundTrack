@@ -18,7 +18,7 @@ FROM menu m
 LEFT JOIN menu p ON p.menu_id = m.parent_menu_id
 CROSS JOIN role r
 WHERE r.is_active
-  AND (m.route = '/' OR m.name IN ('Arqueos', 'Catálogos') AND m.parent_menu_id IS NULL OR p.name IN ('Arqueos', 'Catálogos'))
+  AND (m.route = '/' OR m.name IN ('Arqueos', 'Catálogos', 'Reportes') AND m.parent_menu_id IS NULL OR p.name IN ('Arqueos', 'Catálogos', 'Reportes'))
 ON CONFLICT DO NOTHING;
 
 -- Auditoría: también Analista y Administrador (el grupo Administración

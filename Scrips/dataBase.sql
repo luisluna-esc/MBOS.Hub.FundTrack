@@ -269,8 +269,14 @@ CREATE TABLE local_fund_count (
     church_type VARCHAR(30) NOT NULL,
     submission_status VARCHAR(30) NOT NULL,
     acms_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
-    cash_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-    bank_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+    -- Arqueo: extracto + depósito + billetes y monedas + dólares en Bs + documentos = total_amount.
+    bank_statement_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
+    bank_deposit NUMERIC(14,2) NOT NULL DEFAULT 0,
+    local_cash NUMERIC(14,2) NOT NULL DEFAULT 0,
+    usd_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+    exchange_rate NUMERIC(10,4) NOT NULL DEFAULT 0,
+    usd_amount_bs NUMERIC(14,2) NOT NULL DEFAULT 0,
+    documents_total NUMERIC(14,2) NOT NULL DEFAULT 0,
     total_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
     difference NUMERIC(14,2) NOT NULL DEFAULT 0,
     difference_status VARCHAR(30),
@@ -287,7 +293,7 @@ CREATE TABLE local_fund_count (
     CONSTRAINT uq_local_fund_count_church_period UNIQUE (church_id, period_id),
     CONSTRAINT ck_local_fund_count_church_type CHECK (church_type IN ('Iglesia', 'Grupo', 'Filial')),
     CONSTRAINT ck_local_fund_count_submission_status CHECK (submission_status IN ('submitted', 'not_submitted')),
-    CONSTRAINT ck_local_fund_count_difference_status CHECK (difference_status IN ('none', 'pending', 'justified', 'resolved')),
+    CONSTRAINT ck_local_fund_count_difference_status CHECK (difference_status IN ('none', 'pending', 'resolved')),
     CONSTRAINT fk_local_fund_count_church FOREIGN KEY (church_id) REFERENCES church(church_id),
     CONSTRAINT fk_local_fund_count_period FOREIGN KEY (period_id) REFERENCES period(period_id),
     CONSTRAINT fk_local_fund_count_district FOREIGN KEY (district_id) REFERENCES district(district_id),
@@ -303,6 +309,20 @@ CREATE INDEX idx_local_fund_count_pastor ON local_fund_count(pastor_id);
 -- =====================================================================
 -- LEVEL 5: depend on local_fund_count
 -- =====================================================================
+
+-- Documentos a rendir del arqueo (facturas, recibos y otros): se suman al total en custodia.
+CREATE TABLE local_fund_count_document (
+    local_fund_count_document_id BIGSERIAL PRIMARY KEY,
+    local_fund_count_id BIGINT NOT NULL,
+    document_date DATE NOT NULL,
+    document_number VARCHAR(50),
+    detail VARCHAR(500) NOT NULL,
+    amount NUMERIC(14,2) NOT NULL,
+    CONSTRAINT ck_lfc_document_amount CHECK (amount > 0),
+    CONSTRAINT fk_lfc_document_count FOREIGN KEY (local_fund_count_id) REFERENCES local_fund_count(local_fund_count_id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_lfc_document_count ON local_fund_count_document (local_fund_count_id);
 
 CREATE TABLE local_fund_count_attachment (
     local_fund_count_attachment_id BIGSERIAL PRIMARY KEY,
@@ -329,7 +349,7 @@ CREATE TABLE local_fund_count_correction (
     reason VARCHAR(500) NOT NULL,
     app_user_id BIGINT,
     registered_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    CONSTRAINT ck_lfc_correction_field_name CHECK (field_name IN ('acms_balance', 'cash_amount', 'bank_amount')),
+    CONSTRAINT ck_lfc_correction_field_name CHECK (field_name IN ('acms_balance', 'total_amount')),
     CONSTRAINT fk_lfc_correction_count FOREIGN KEY (local_fund_count_id) REFERENCES local_fund_count(local_fund_count_id),
     CONSTRAINT fk_lfc_correction_period FOREIGN KEY (applied_period_id) REFERENCES period(period_id),
     CONSTRAINT fk_lfc_correction_app_user FOREIGN KEY (app_user_id) REFERENCES app_user(app_user_id)
@@ -346,8 +366,8 @@ CREATE TABLE difference_follow_up (
     justification VARCHAR(1000) NOT NULL,
     app_user_id BIGINT,
     followed_up_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    CONSTRAINT ck_difference_follow_up_previous_status CHECK (previous_status IN ('none', 'pending', 'justified', 'resolved')),
-    CONSTRAINT ck_difference_follow_up_new_status CHECK (new_status IN ('none', 'pending', 'justified', 'resolved')),
+    CONSTRAINT ck_difference_follow_up_previous_status CHECK (previous_status IN ('none', 'pending', 'resolved')),
+    CONSTRAINT ck_difference_follow_up_new_status CHECK (new_status IN ('none', 'pending', 'resolved')),
     CONSTRAINT fk_difference_follow_up_count FOREIGN KEY (local_fund_count_id) REFERENCES local_fund_count(local_fund_count_id),
     CONSTRAINT fk_difference_follow_up_app_user FOREIGN KEY (app_user_id) REFERENCES app_user(app_user_id)
 );

@@ -10,6 +10,7 @@ public interface ILocalFundCountService
     Task<ResponseGetObject> GetAllLocalFundCounts(PaginationQueryFilter paginationQueryFilter, LocalFundCountQueryFilter localFundCountQueryFilter);
     Task<ResponseGetObject> GetLocalFundCount(long id);
     Task<ResponseGetObject> GetByPeriod(long periodId, long? regionId, long? districtId);
+    Task<ResponseGetObject> GetDocuments(long id);
     Task<ResponsePost> InsertLocalFundCount(LocalFundCountRequestDto localFundCountRequestDto);
     Task<ResponsePost> UpdateLocalFundCount(long id, LocalFundCountRequestDto localFundCountRequestDto);
     Task<ResponsePost> DeleteLocalFundCount(long id);
