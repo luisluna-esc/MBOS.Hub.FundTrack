@@ -25,7 +25,7 @@ public partial class ReportService
         IReadOnlyList<LocalFundCountDocument> Documents,
         IReadOnlyList<string> Filials);
 
-    public async Task<ReportResult> ExportLocalFundCountVoucher(LocalFundCountVoucherQueryFilter filter)
+    public async Task<ReportResult> ExportLocalFundCountVoucher(LocalFundCountVoucherQueryFilter filter, ReportFormat format = ReportFormat.Pdf)
     {
         if (filter.LocalFundCountId is null && filter.PeriodId is null)
             return new ReportResult(null, BadRequest("Elige el mes del arqueo."));
@@ -80,18 +80,75 @@ public partial class ReportService
 
         var username = await CurrentUserFullNameAsync();
         var first = vouchers[0].Count;
-        var fileName = vouchers.Count == 1
-            ? $"arqueo-{first.ChurchCode}-{first.PeriodYear}-{first.PeriodMonth:00}.pdf"
-            : $"arqueos-{first.PeriodYear}-{first.PeriodMonth:00}.pdf";
+        var fileBase = vouchers.Count == 1
+            ? $"arqueo-{first.ChurchCode}-{first.PeriodYear}-{first.PeriodMonth:00}"
+            : $"arqueos-{first.PeriodYear}-{first.PeriodMonth:00}";
 
-        var file = new ReportFile(BuildVoucherPdf(vouchers, username), PdfContentType, fileName);
+        var file = format == ReportFormat.Pdf
+            ? new ReportFile(BuildVoucherPdf(vouchers, username), PdfContentType, $"{fileBase}.pdf")
+            : SpreadsheetFile(BuildVoucherExcel(vouchers, username), format, fileBase);
 
         var description = vouchers.Count == 1
             ? $"Arqueo {first.ChurchName} {MonthNames[first.PeriodMonth - 1]} {first.PeriodYear}"
             : $"{vouchers.Count} arqueos de {MonthNames[first.PeriodMonth - 1]} {first.PeriodYear}";
-        await _auditLogService.LogReportAccess(VoucherReportName, "EXPORT", description);
+        await _auditLogService.LogReportAccess(VoucherReportName, "EXPORT", $"{description} en {format}");
 
         return new ReportResult(file, null);
+    }
+
+    /// <summary>
+    /// En Excel y TXT el arqueo va en filas: una por iglesia con todos los montos, y en otra hoja los
+    /// documentos a rendir de cada una.
+    /// </summary>
+    private static byte[] BuildVoucherExcel(IReadOnlyList<VoucherData> vouchers, string username)
+    {
+        var first = vouchers[0].Count;
+        string[] info = [$"{MonthNames[first.PeriodMonth - 1]} {first.PeriodYear}", $"Arqueos: {vouchers.Count}"];
+
+        var countColumns = new List<ExcelColumn<VoucherData>>
+        {
+            new("Región", v => v.Count.RegionName),
+            new("Distrito", v => v.Count.DistrictName),
+            new("Pastor", v => v.Count.PastorName),
+            new("Código", v => v.Count.ChurchCode),
+            new("Iglesia", v => v.Count.ChurchName),
+            new("Tipo", v => v.Count.ChurchType),
+            new("Filiales", v => string.Join(", ", v.Filials)),
+            new("Presentó", v => v.Count.SubmissionStatus == SubmissionStatuses.Submitted ? (v.Count.SummaryOnly ? "Arqueo de la iglesia" : "Sí") : "No"),
+            new("Fecha del arqueo", v => v.Count.CountDate?.ToDateTime(TimeOnly.MinValue), "dd/MM/yyyy"),
+            new("Saldo ACMS", v => v.Count.AcmsBalance, MoneyFormat, Total: true),
+            new("Extracto bancario", v => v.Count.BankStatementBalance, MoneyFormat, Total: true),
+            new("Depósito bancario", v => v.Count.BankDeposit, MoneyFormat, Total: true),
+            new("Billetes y monedas", v => v.Count.LocalCash, MoneyFormat, Total: true),
+            new("Dólares", v => v.Count.UsdAmount, MoneyFormat, Total: true),
+            new("Tipo de cambio", v => v.Count.ExchangeRate, MoneyFormat),
+            new("Dólares en Bs", v => v.Count.UsdAmountBs, MoneyFormat, Total: true),
+            new("Documentos", v => v.Count.DocumentsTotal, MoneyFormat, Total: true),
+            new("Total en custodia", v => v.Count.TotalAmount, MoneyFormat, Total: true),
+            new("Diferencia", v => v.Count.Difference, MoneyFormat, Total: true),
+            new("Observación", v => v.Count.Observation),
+            new("Tesorero", v => v.Count.TreasurerName),
+            new("Anciano", v => v.Count.ElderName),
+            new("Firmó el pastor", v => v.Count.SignedByPastor ? "Sí" : "No"),
+            new("Firmó el anciano", v => v.Count.SignedByElder ? "Sí" : "No")
+        };
+
+        var documents = vouchers.SelectMany(v => v.Documents.Select(d => (v.Count, Document: d))).ToList();
+        var documentColumns = new List<ExcelColumn<(LocalFundCountGetAllRow Count, LocalFundCountDocument Document)>>
+        {
+            new("Código", d => d.Count.ChurchCode),
+            new("Iglesia", d => d.Count.ChurchName),
+            new("Fecha", d => d.Document.DocumentDate.ToDateTime(TimeOnly.MinValue), "dd/MM/yyyy"),
+            new("N° documento", d => d.Document.DocumentNumber),
+            new("Detalle", d => d.Document.Detail),
+            new("Monto", d => d.Document.Amount, MoneyFormat, Total: true)
+        };
+
+        using var workbook = new ClosedXML.Excel.XLWorkbook();
+        AddSheet(workbook, "Arqueos", "ARQUEO DEL FONDO LOCAL", info, countColumns, vouchers, username);
+        if (documents.Count > 0)
+            AddSheet(workbook, "Documentos", "DOCUMENTOS A RENDIR", info, documentColumns, documents, username);
+        return SaveWorkbook(workbook);
     }
 
     private byte[] BuildVoucherPdf(IReadOnlyList<VoucherData> vouchers, string username)
@@ -171,7 +228,21 @@ public partial class ReportService
                 $"SALDO SEGÚN BALANCE POR DEPARTAMENTO (ACMS){(count.CountDate.HasValue ? $" al {count.CountDate:dd/MM/yyyy}" : "")}",
                 count.AcmsBalance, bold: true, fill: true));
 
-            if (!submitted)
+            if (submitted && count.SummaryOnly)
+            {
+                // La iglesia trajo su arqueo ya hecho: solo el total.
+                column.Item().PaddingTop(6).Element(c => AmountLine(c, "ARQUEO PRESENTADO POR LA IGLESIA (total)", count.TotalAmount, bold: true));
+                column.Item().AlignRight().Width(300).Column(totals =>
+                {
+                    totals.Spacing(2);
+                    totals.Item().Element(c => AmountLine(c, "TOTAL FONDOS EN CUSTODIA DEL TESORERO", count.TotalAmount, bold: true, fill: true));
+                    totals.Item().Element(c => AmountLine(c,
+                        count.Difference == 0 ? "Diferencia" : count.Difference > 0 ? "Diferencia de más" : "Diferencia de menos",
+                        count.Difference, bold: true, color: DifferenceColor(count.Difference)));
+                });
+                column.Item().Text("La iglesia presentó su arqueo ya hecho: aquí se registra solo el total.").FontSize(8).Italic();
+            }
+            else if (!submitted)
             {
                 column.Item().PaddingVertical(20).AlignCenter()
                     .Text("La iglesia no presentó su arqueo este mes.").Italic().FontSize(11);

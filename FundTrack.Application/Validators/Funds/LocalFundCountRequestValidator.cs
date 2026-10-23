@@ -21,7 +21,14 @@ public class LocalFundCountRequestValidator : AbstractValidator<LocalFundCountRe
 
         // El saldo ACMS sí puede ser negativo (pasa cuando la iglesia gasta más de lo que tiene),
         // pero lo que tiene el tesorero (banco, efectivo, dólares y documentos) no.
-        When(x => x.SubmissionStatus == SubmissionStatuses.Submitted, () =>
+        // Arqueo hecho por la iglesia: solo el total, sin fecha obligatoria ni explicación de la diferencia.
+        When(x => x.SubmissionStatus == SubmissionStatuses.Submitted && x.SummaryOnly, () =>
+        {
+            RuleFor(x => x.SummaryTotal).GreaterThanOrEqualTo(0).WithMessage("El total del arqueo no puede ser negativo.");
+            RuleFor(x => x.CountDate).Must(NotInFuture).WithMessage("La fecha del arqueo no puede ser futura.");
+        });
+
+        When(x => x.SubmissionStatus == SubmissionStatuses.Submitted && !x.SummaryOnly, () =>
         {
             RuleFor(x => x.BankStatementBalance).GreaterThanOrEqualTo(0).WithMessage("El saldo según extracto bancario no puede ser negativo.");
             RuleFor(x => x.BankDeposit).GreaterThanOrEqualTo(0).WithMessage("El depósito bancario no puede ser negativo.");

@@ -35,6 +35,10 @@ public class ReportsController : ControllerBase
     public Task<IActionResult> GetLocalFundYearExcel([FromQuery] LocalFundYearReportQueryFilter filter) =>
         Export(_reportService.ExportLocalFundYearReport(filter, ReportFormat.Excel));
 
+    [HttpGet("local-fund/txt")]
+    public Task<IActionResult> GetLocalFundYearTxt([FromQuery] LocalFundYearReportQueryFilter filter) =>
+        Export(_reportService.ExportLocalFundYearReport(filter, ReportFormat.Txt));
+
     [HttpGet("pending")]
     public async Task<IActionResult> GetPending([FromQuery] PendingReportQueryFilter filter)
     {
@@ -50,6 +54,10 @@ public class ReportsController : ControllerBase
     public Task<IActionResult> GetPendingExcel([FromQuery] PendingReportQueryFilter filter) =>
         Export(_reportService.ExportPendingReport(filter, ReportFormat.Excel));
 
+    [HttpGet("pending/txt")]
+    public Task<IActionResult> GetPendingTxt([FromQuery] PendingReportQueryFilter filter) =>
+        Export(_reportService.ExportPendingReport(filter, ReportFormat.Txt));
+
     [HttpGet("differences/pdf")]
     public Task<IActionResult> GetDifferencesPdf([FromQuery] DifferencesReportQueryFilter filter) =>
         Export(_reportService.ExportDifferencesReport(filter, ReportFormat.Pdf));
@@ -57,6 +65,10 @@ public class ReportsController : ControllerBase
     [HttpGet("differences/excel")]
     public Task<IActionResult> GetDifferencesExcel([FromQuery] DifferencesReportQueryFilter filter) =>
         Export(_reportService.ExportDifferencesReport(filter, ReportFormat.Excel));
+
+    [HttpGet("differences/txt")]
+    public Task<IActionResult> GetDifferencesTxt([FromQuery] DifferencesReportQueryFilter filter) =>
+        Export(_reportService.ExportDifferencesReport(filter, ReportFormat.Txt));
 
     [HttpGet("compliance/pdf")]
     public Task<IActionResult> GetCompliancePdf([FromQuery] ComplianceReportQueryFilter filter) =>
@@ -66,6 +78,10 @@ public class ReportsController : ControllerBase
     public Task<IActionResult> GetComplianceExcel([FromQuery] ComplianceReportQueryFilter filter) =>
         Export(_reportService.ExportComplianceReport(filter, ReportFormat.Excel));
 
+    [HttpGet("compliance/txt")]
+    public Task<IActionResult> GetComplianceTxt([FromQuery] ComplianceReportQueryFilter filter) =>
+        Export(_reportService.ExportComplianceReport(filter, ReportFormat.Txt));
+
     [HttpGet("negative-acms/pdf")]
     public Task<IActionResult> GetNegativeAcmsPdf([FromQuery] NegativeAcmsReportQueryFilter filter) =>
         Export(_reportService.ExportNegativeAcmsReport(filter, ReportFormat.Pdf));
@@ -73,6 +89,10 @@ public class ReportsController : ControllerBase
     [HttpGet("negative-acms/excel")]
     public Task<IActionResult> GetNegativeAcmsExcel([FromQuery] NegativeAcmsReportQueryFilter filter) =>
         Export(_reportService.ExportNegativeAcmsReport(filter, ReportFormat.Excel));
+
+    [HttpGet("negative-acms/txt")]
+    public Task<IActionResult> GetNegativeAcmsTxt([FromQuery] NegativeAcmsReportQueryFilter filter) =>
+        Export(_reportService.ExportNegativeAcmsReport(filter, ReportFormat.Txt));
 
     [HttpGet("region-summary/pdf")]
     public Task<IActionResult> GetRegionSummaryPdf([FromQuery] RegionSummaryReportQueryFilter filter) =>
@@ -82,6 +102,10 @@ public class ReportsController : ControllerBase
     public Task<IActionResult> GetRegionSummaryExcel([FromQuery] RegionSummaryReportQueryFilter filter) =>
         Export(_reportService.ExportRegionSummaryReport(filter, ReportFormat.Excel));
 
+    [HttpGet("region-summary/txt")]
+    public Task<IActionResult> GetRegionSummaryTxt([FromQuery] RegionSummaryReportQueryFilter filter) =>
+        Export(_reportService.ExportRegionSummaryReport(filter, ReportFormat.Txt));
+
     [HttpGet("corrections/pdf")]
     public Task<IActionResult> GetCorrectionsPdf([FromQuery] CorrectionsReportQueryFilter filter) =>
         Export(_reportService.ExportCorrectionsReport(filter, ReportFormat.Pdf));
@@ -89,6 +113,10 @@ public class ReportsController : ControllerBase
     [HttpGet("corrections/excel")]
     public Task<IActionResult> GetCorrectionsExcel([FromQuery] CorrectionsReportQueryFilter filter) =>
         Export(_reportService.ExportCorrectionsReport(filter, ReportFormat.Excel));
+
+    [HttpGet("corrections/txt")]
+    public Task<IActionResult> GetCorrectionsTxt([FromQuery] CorrectionsReportQueryFilter filter) =>
+        Export(_reportService.ExportCorrectionsReport(filter, ReportFormat.Txt));
 
     [HttpGet("church-movements/pdf")]
     public Task<IActionResult> GetChurchMovementsPdf([FromQuery] ChurchMovementsReportQueryFilter filter) =>
@@ -98,9 +126,21 @@ public class ReportsController : ControllerBase
     public Task<IActionResult> GetChurchMovementsExcel([FromQuery] ChurchMovementsReportQueryFilter filter) =>
         Export(_reportService.ExportChurchMovementsReport(filter, ReportFormat.Excel));
 
+    [HttpGet("church-movements/txt")]
+    public Task<IActionResult> GetChurchMovementsTxt([FromQuery] ChurchMovementsReportQueryFilter filter) =>
+        Export(_reportService.ExportChurchMovementsReport(filter, ReportFormat.Txt));
+
     [HttpGet("local-fund-count/pdf")]
     public Task<IActionResult> GetLocalFundCountVoucher([FromQuery] LocalFundCountVoucherQueryFilter filter) =>
-        Export(_reportService.ExportLocalFundCountVoucher(filter));
+        Export(_reportService.ExportLocalFundCountVoucher(filter, ReportFormat.Pdf));
+
+    [HttpGet("local-fund-count/excel")]
+    public Task<IActionResult> GetLocalFundCountExcel([FromQuery] LocalFundCountVoucherQueryFilter filter) =>
+        Export(_reportService.ExportLocalFundCountVoucher(filter, ReportFormat.Excel));
+
+    [HttpGet("local-fund-count/txt")]
+    public Task<IActionResult> GetLocalFundCountTxt([FromQuery] LocalFundCountVoucherQueryFilter filter) =>
+        Export(_reportService.ExportLocalFundCountVoucher(filter, ReportFormat.Txt));
 
     private async Task<IActionResult> Export(Task<ReportResult> export)
     {

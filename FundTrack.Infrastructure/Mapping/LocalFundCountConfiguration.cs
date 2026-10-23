@@ -40,6 +40,9 @@ public class LocalFundCountConfiguration : IEntityTypeConfiguration<LocalFundCou
               .HasMaxLength(30)
               .HasColumnName("submission_status");
 
+        entity.Property(e => e.SummaryOnly)
+              .HasColumnName("summary_only");
+
         entity.Property(e => e.AcmsBalance)
               .HasColumnName("acms_balance")
               .HasPrecision(14, 2);

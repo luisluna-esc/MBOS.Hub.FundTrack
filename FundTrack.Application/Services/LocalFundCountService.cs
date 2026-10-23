@@ -61,6 +61,7 @@ public class LocalFundCountService : ILocalFundCountService
             pastor_name AS "PastorName",
             church_type AS "ChurchType",
             submission_status AS "SubmissionStatus",
+            summary_only AS "SummaryOnly",
             acms_balance AS "AcmsBalance",
             bank_statement_balance AS "BankStatementBalance",
             bank_deposit AS "BankDeposit",
@@ -111,6 +112,7 @@ public class LocalFundCountService : ILocalFundCountService
             local_fund_count_id AS "LocalFundCountId",
             count_church_type AS "CountChurchType",
             submission_status AS "SubmissionStatus",
+            summary_only AS "SummaryOnly",
             acms_balance AS "AcmsBalance",
             bank_statement_balance AS "BankStatementBalance",
             bank_deposit AS "BankDeposit",
@@ -304,6 +306,7 @@ public class LocalFundCountService : ILocalFundCountService
             PastorName = row.PastorName,
             ChurchType = row.CountChurchType ?? row.ChurchType,
             SubmissionStatus = row.SubmissionStatus ?? string.Empty,
+            SummaryOnly = row.SummaryOnly ?? false,
             AcmsBalance = row.AcmsBalance ?? 0,
             BankStatementBalance = row.BankStatementBalance ?? 0,
             BankDeposit = row.BankDeposit ?? 0,
@@ -562,6 +565,7 @@ public class LocalFundCountService : ILocalFundCountService
         count.AcmsBalance = request.AcmsBalance;
         count.SignedByPastor = request.SignedByPastor;
         count.SignedByElder = request.SignedByElder;
+        count.SummaryOnly = request.SubmissionStatus == SubmissionStatuses.Submitted && request.SummaryOnly;
 
         if (request.SubmissionStatus == SubmissionStatuses.NotSubmitted)
         {
@@ -577,6 +581,27 @@ public class LocalFundCountService : ILocalFundCountService
             count.DifferenceStatus = DifferenceStatuses.None;
             count.CountDate = null;
             count.Observation = null;
+            return;
+        }
+
+        if (count.SummaryOnly)
+        {
+            // Arqueo hecho por la iglesia: solo el total; la diferencia se registra igual, pero no
+            // hace falta explicarla (la observación queda si la escribieron).
+            count.BankStatementBalance = 0;
+            count.BankDeposit = 0;
+            count.LocalCash = 0;
+            count.UsdAmount = 0;
+            count.ExchangeRate = 0;
+            count.UsdAmountBs = 0;
+            count.DocumentsTotal = 0;
+            count.TotalAmount = request.SummaryTotal;
+            count.Difference = count.TotalAmount - request.AcmsBalance;
+            count.CountDate = request.CountDate;
+            count.Observation = string.IsNullOrWhiteSpace(request.Observation) ? null : request.Observation.Trim();
+            count.DifferenceStatus = count.Difference == 0
+                ? DifferenceStatuses.None
+                : count.DifferenceStatus is null or DifferenceStatuses.None ? DifferenceStatuses.Pending : count.DifferenceStatus;
             return;
         }
 
@@ -613,9 +638,9 @@ public class LocalFundCountService : ILocalFundCountService
     public static decimal TotalInCustody(LocalFundCountRequestDto request) =>
         request.BankStatementBalance + request.BankDeposit + request.LocalCash + UsdInBs(request) + request.Documents.Sum(d => d.Amount);
 
-    /// <summary>Si no presentó, no hay documentos.</summary>
+    /// <summary>Si no presentó, o si solo se registró el total, no hay documentos.</summary>
     private static List<LocalFundCountDocument> NewDocuments(LocalFundCountRequestDto request) =>
-        request.SubmissionStatus == SubmissionStatuses.NotSubmitted
+        request.SubmissionStatus == SubmissionStatuses.NotSubmitted || request.SummaryOnly
             ? []
             : request.Documents.Select(d => new LocalFundCountDocument
             {

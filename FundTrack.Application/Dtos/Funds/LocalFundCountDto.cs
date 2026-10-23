@@ -18,6 +18,8 @@ public class LocalFundCountDto
     public string? PastorName { get; set; }
     public string ChurchType { get; set; } = string.Empty;
     public string SubmissionStatus { get; set; } = string.Empty;
+    /// <summary>Arqueo hecho por la iglesia: solo ACMS y total.</summary>
+    public bool SummaryOnly { get; set; }
     public decimal AcmsBalance { get; set; }
     public decimal BankStatementBalance { get; set; }
     public decimal BankDeposit { get; set; }

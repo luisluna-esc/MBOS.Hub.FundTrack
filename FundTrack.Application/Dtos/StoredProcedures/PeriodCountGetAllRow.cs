@@ -24,6 +24,7 @@ public class PeriodCountGetAllRow
     public long? LocalFundCountId { get; set; }
     public string? CountChurchType { get; set; }
     public string? SubmissionStatus { get; set; }
+    public bool? SummaryOnly { get; set; }
     public decimal? AcmsBalance { get; set; }
     public decimal? BankStatementBalance { get; set; }
     public decimal? BankDeposit { get; set; }

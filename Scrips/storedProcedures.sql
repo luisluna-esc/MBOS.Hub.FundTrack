@@ -254,6 +254,7 @@ RETURNS TABLE (
     pastor_name TEXT,
     church_type VARCHAR,
     submission_status VARCHAR,
+    summary_only BOOLEAN,
     acms_balance NUMERIC,
     bank_statement_balance NUMERIC,
     bank_deposit NUMERIC,
@@ -301,6 +302,7 @@ AS $$
         (pa.last_names || ', ' || pa.first_names) AS pastor_name,
         lfc.church_type,
         lfc.submission_status,
+        lfc.summary_only,
         lfc.acms_balance,
         lfc.bank_statement_balance,
         lfc.bank_deposit,
@@ -382,6 +384,7 @@ RETURNS TABLE (
     local_fund_count_id BIGINT,
     count_church_type VARCHAR,
     submission_status VARCHAR,
+    summary_only BOOLEAN,
     acms_balance NUMERIC,
     bank_statement_balance NUMERIC,
     bank_deposit NUMERIC,
@@ -429,6 +432,7 @@ AS $$
         lfc.local_fund_count_id,
         lfc.church_type AS count_church_type,
         lfc.submission_status,
+        lfc.summary_only,
         lfc.acms_balance,
         lfc.bank_statement_balance,
         lfc.bank_deposit,
@@ -478,7 +482,10 @@ AS $$
 $$;
 
 -- ---------------------------------------------------------------------
--- Auditoría: nombre del usuario. Antes: 3 consultas por llamada.
+-- Auditoría: quién creó, editó o eliminó qué y cuándo. Solo esas tres acciones (no las descargas
+-- de reportes), sin las sesiones (refresh_token) ni los ingresos al sistema (app_user que solo
+-- cambia la fecha de ingreso o los intentos fallidos). record_label dice de qué registro se trata
+-- (la iglesia y el mes de un arqueo, el nombre de una iglesia, etc.) para no mostrar solo un id.
 -- ---------------------------------------------------------------------
 DROP FUNCTION IF EXISTS sp_get_audit_logs;
 CREATE OR REPLACE FUNCTION sp_get_audit_logs(
@@ -494,43 +501,96 @@ RETURNS TABLE (
     app_user_id BIGINT,
     app_user_full_name VARCHAR,
     action VARCHAR,
-    module VARCHAR,
     table_name VARCHAR,
     record_id BIGINT,
-    description VARCHAR,
+    record_label TEXT,
     old_value TEXT,
     new_value TEXT,
-    ip VARCHAR,
-    user_agent VARCHAR,
     created_at TIMESTAMPTZ,
     total_records INT
 )
 LANGUAGE sql
 STABLE
 AS $$
+    WITH logs AS (
+        SELECT
+            al.*,
+            COALESCE(al.new_value, al.old_value) AS v,
+            CAST(COUNT(*) OVER() AS INT) AS total_records
+        FROM audit_log al
+        WHERE al.action IN ('INSERT', 'UPDATE', 'DELETE')
+          AND al.table_name <> 'refresh_token'
+          AND NOT (
+              al.table_name = 'app_user' AND al.action = 'UPDATE'
+              AND (al.old_value - ARRAY['LastLogin', 'FailedLoginAttempts', 'LockedUntil'])
+                = (al.new_value - ARRAY['LastLogin', 'FailedLoginAttempts', 'LockedUntil'])
+          )
+          AND (p_app_user_id IS NULL OR al.app_user_id = p_app_user_id)
+          AND (p_table_name IS NULL OR al.table_name = p_table_name)
+          AND (p_record_id IS NULL OR al.record_id = p_record_id)
+          AND (p_action IS NULL OR al.action = p_action)
+        ORDER BY al.created_at DESC, al.audit_log_id DESC
+        LIMIT p_page_size OFFSET (p_page_number - 1) * p_page_size
+    )
     SELECT
-        al.audit_log_id,
-        al.app_user_id,
+        l.audit_log_id,
+        l.app_user_id,
         u.full_name AS app_user_full_name,
-        al.action,
-        al.module,
-        al.table_name,
-        al.record_id,
-        al.description,
-        al.old_value::TEXT,
-        al.new_value::TEXT,
-        al.ip,
-        al.user_agent,
-        al.created_at AT TIME ZONE 'UTC' AS created_at,
-        CAST(COUNT(*) OVER() AS INT) AS total_records
-    FROM audit_log al
-    LEFT JOIN app_user u ON u.app_user_id = al.app_user_id
-    WHERE (p_app_user_id IS NULL OR al.app_user_id = p_app_user_id)
-      AND (p_table_name IS NULL OR al.table_name = p_table_name)
-      AND (p_record_id IS NULL OR al.record_id = p_record_id)
-      AND (p_action IS NULL OR al.action = p_action)
-    ORDER BY al.created_at DESC
-    LIMIT p_page_size OFFSET (p_page_number - 1) * p_page_size;
+        l.action,
+        l.table_name,
+        l.record_id,
+        CASE l.table_name
+            WHEN 'local_fund_count' THEN (
+                SELECT concat_ws(' · ', c.code || ' ' || c.name, lpad(p.month::text, 2, '0') || '/' || p.year)
+                FROM church c
+                LEFT JOIN period p ON p.period_id = (l.v->>'PeriodId')::bigint
+                WHERE c.church_id = (l.v->>'ChurchId')::bigint)
+            WHEN 'local_fund_count_document' THEN COALESCE((
+                SELECT concat_ws(' · ', c.code || ' ' || c.name, lpad(p.month::text, 2, '0') || '/' || p.year, l.v->>'Detail')
+                FROM local_fund_count lc
+                JOIN church c ON c.church_id = lc.church_id
+                JOIN period p ON p.period_id = lc.period_id
+                WHERE lc.local_fund_count_id = (l.v->>'LocalFundCountId')::bigint), l.v->>'Detail')
+            WHEN 'local_fund_count_attachment' THEN (
+                SELECT concat_ws(' · ', c.code || ' ' || c.name, lpad(p.month::text, 2, '0') || '/' || p.year)
+                FROM local_fund_count lc
+                JOIN church c ON c.church_id = lc.church_id
+                JOIN period p ON p.period_id = lc.period_id
+                WHERE lc.local_fund_count_id = (l.v->>'LocalFundCountId')::bigint)
+            WHEN 'local_fund_count_correction' THEN (
+                SELECT concat_ws(' · ', c.code || ' ' || c.name, lpad(p.month::text, 2, '0') || '/' || p.year)
+                FROM local_fund_count lc
+                JOIN church c ON c.church_id = lc.church_id
+                JOIN period p ON p.period_id = lc.period_id
+                WHERE lc.local_fund_count_id = (l.v->>'LocalFundCountId')::bigint)
+            WHEN 'difference_follow_up' THEN (
+                SELECT concat_ws(' · ', c.code || ' ' || c.name, lpad(p.month::text, 2, '0') || '/' || p.year)
+                FROM local_fund_count lc
+                JOIN church c ON c.church_id = lc.church_id
+                JOIN period p ON p.period_id = lc.period_id
+                WHERE lc.local_fund_count_id = (l.v->>'LocalFundCountId')::bigint)
+            WHEN 'church_history' THEN (SELECT c.code || ' ' || c.name FROM church c WHERE c.church_id = (l.v->>'ChurchId')::bigint)
+            WHEN 'church' THEN concat_ws(' ', l.v->>'Code', l.v->>'Name')
+            WHEN 'pastor' THEN concat_ws(' ', l.v->>'FirstNames', l.v->>'LastNames')
+            WHEN 'district_pastor' THEN concat_ws(' · ',
+                (SELECT pa.first_names || ' ' || pa.last_names FROM pastor pa WHERE pa.pastor_id = (l.v->>'PastorId')::bigint),
+                (SELECT d.name FROM district d WHERE d.district_id = (l.v->>'DistrictId')::bigint))
+            WHEN 'period' THEN lpad(l.v->>'Month', 2, '0') || '/' || (l.v->>'Year')
+            WHEN 'app_user_role' THEN concat_ws(' · ',
+                (SELECT au.full_name FROM app_user au WHERE au.app_user_id = (l.v->>'AppUserId')::bigint),
+                (SELECT r.name FROM role r WHERE r.role_id = (l.v->>'RoleId')::bigint))
+            WHEN 'menu_role' THEN concat_ws(' · ',
+                (SELECT r.name FROM role r WHERE r.role_id = (l.v->>'RoleId')::bigint),
+                (SELECT m.name FROM menu m WHERE m.menu_id = (l.v->>'MenuId')::bigint))
+            ELSE COALESCE(l.v->>'FullName', l.v->>'Name', l.v->>'Username')
+        END AS record_label,
+        l.old_value::TEXT,
+        l.new_value::TEXT,
+        l.created_at AT TIME ZONE 'UTC' AS created_at,
+        l.total_records
+    FROM logs l
+    LEFT JOIN app_user u ON u.app_user_id = l.app_user_id
+    ORDER BY l.created_at DESC, l.audit_log_id DESC;
 $$;
 
 -- ---------------------------------------------------------------------
@@ -635,7 +695,8 @@ CREATE OR REPLACE FUNCTION sp_report_local_fund_year(
     p_month_to INT,
     p_region_id BIGINT,
     p_district_id BIGINT,
-    p_restricted_district_id BIGINT
+    p_restricted_district_id BIGINT,
+    p_church_id BIGINT
 )
 RETURNS TABLE (
     region_name VARCHAR,
@@ -671,6 +732,7 @@ AS $$
           AND (p_restricted_district_id IS NULL OR c.district_id = p_restricted_district_id)
           AND (p_district_id IS NULL OR c.district_id = p_district_id)
           AND (p_region_id IS NULL OR r.region_id = p_region_id)
+          AND (p_church_id IS NULL OR c.church_id = p_church_id)
     )
     SELECT
         ch.region_name,
@@ -704,7 +766,8 @@ CREATE OR REPLACE FUNCTION sp_report_pending(
     p_period_id BIGINT,
     p_region_id BIGINT,
     p_district_id BIGINT,
-    p_restricted_district_id BIGINT
+    p_restricted_district_id BIGINT,
+    p_church_id BIGINT
 )
 RETURNS TABLE (
     region_name VARCHAR,
@@ -759,6 +822,7 @@ AS $$
       AND (p_restricted_district_id IS NULL OR d.district_id = p_restricted_district_id)
       AND (p_district_id IS NULL OR d.district_id = p_district_id)
       AND (p_region_id IS NULL OR r.region_id = p_region_id)
+      AND (p_church_id IS NULL OR c.church_id = p_church_id)
     ORDER BY r.name, d.name, c.name;
 $$;
 
@@ -773,7 +837,8 @@ CREATE OR REPLACE FUNCTION sp_report_differences(
     p_status VARCHAR,
     p_region_id BIGINT,
     p_district_id BIGINT,
-    p_restricted_district_id BIGINT
+    p_restricted_district_id BIGINT,
+    p_church_id BIGINT
 )
 RETURNS TABLE (
     region_name VARCHAR,
@@ -843,6 +908,7 @@ AS $$
       AND (p_restricted_district_id IS NULL OR lfc.district_id = p_restricted_district_id)
       AND (p_district_id IS NULL OR lfc.district_id = p_district_id)
       AND (p_region_id IS NULL OR r.region_id = p_region_id)
+      AND (p_church_id IS NULL OR c.church_id = p_church_id)
     ORDER BY r.name, d.name, c.name, pe.month;
 $$;
 
@@ -927,7 +993,8 @@ CREATE OR REPLACE FUNCTION sp_report_negative_acms(
     p_month_to INT,
     p_region_id BIGINT,
     p_district_id BIGINT,
-    p_restricted_district_id BIGINT
+    p_restricted_district_id BIGINT,
+    p_church_id BIGINT
 )
 RETURNS TABLE (
     region_name VARCHAR,
@@ -965,6 +1032,7 @@ AS $$
       AND (p_restricted_district_id IS NULL OR lfc.district_id = p_restricted_district_id)
       AND (p_district_id IS NULL OR lfc.district_id = p_district_id)
       AND (p_region_id IS NULL OR r.region_id = p_region_id)
+      AND (p_church_id IS NULL OR c.church_id = p_church_id)
     ORDER BY r.name, d.name, c.name, pe.month;
 $$;
 
@@ -1047,7 +1115,8 @@ CREATE OR REPLACE FUNCTION sp_report_corrections(
     p_year INT,
     p_region_id BIGINT,
     p_district_id BIGINT,
-    p_restricted_district_id BIGINT
+    p_restricted_district_id BIGINT,
+    p_church_id BIGINT
 )
 RETURNS TABLE (
     registered_at TIMESTAMPTZ,
@@ -1095,6 +1164,7 @@ AS $$
       AND (p_restricted_district_id IS NULL OR lfc.district_id = p_restricted_district_id)
       AND (p_district_id IS NULL OR lfc.district_id = p_district_id)
       AND (p_region_id IS NULL OR r.region_id = p_region_id)
+      AND (p_church_id IS NULL OR c.church_id = p_church_id)
     ORDER BY cr.registered_at, c.name;
 $$;
 
@@ -1110,7 +1180,8 @@ CREATE OR REPLACE FUNCTION sp_report_church_movements(
     p_change_type VARCHAR,
     p_region_id BIGINT,
     p_district_id BIGINT,
-    p_restricted_district_id BIGINT
+    p_restricted_district_id BIGINT,
+    p_church_id BIGINT
 )
 RETURNS TABLE (
     changed_at DATE,
@@ -1150,6 +1221,7 @@ AS $$
       AND (p_restricted_district_id IS NULL OR c.district_id = p_restricted_district_id)
       AND (p_district_id IS NULL OR c.district_id = p_district_id)
       AND (p_region_id IS NULL OR r.region_id = p_region_id)
+      AND (p_church_id IS NULL OR c.church_id = p_church_id)
     ORDER BY h.changed_at, c.name;
 $$;
 

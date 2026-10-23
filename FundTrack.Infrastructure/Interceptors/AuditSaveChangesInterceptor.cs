@@ -13,6 +13,11 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
     private static readonly HashSet<string> SensitiveProperties = ["PasswordHash", "Token", "TokenHash"];
     private const string MaskedValue = "***";
 
+    // No son cambios de datos: las sesiones (refresh_token) y, en app_user, lo que se actualiza solo
+    // al ingresar (fecha de ingreso e intentos fallidos).
+    private static readonly HashSet<string> IgnoredTables = ["refresh_token"];
+    private static readonly HashSet<string> LoginProperties = ["LastLogin", "FailedLoginAttempts", "LockedUntil"];
+
     private readonly ICurrentUserService _currentUserService;
     private List<PendingAuditEntry> _pendingEntries = [];
 
@@ -30,6 +35,7 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
             // EF ya los reemplazó por los nuevos.
             _pendingEntries = eventData.Context.ChangeTracker.Entries()
                 .Where(e => e.Entity is not AuditLog && e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+                .Where(IsAudited)
                 .Select(e => new PendingAuditEntry(
                     e,
                     ResolveAction(e.State),
@@ -72,6 +78,15 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
         }
 
         return await base.SavedChangesAsync(eventData, result, cancellationToken);
+    }
+
+    private static bool IsAudited(EntityEntry entry)
+    {
+        if (IgnoredTables.Contains(entry.Metadata.GetTableName() ?? string.Empty))
+            return false;
+
+        return entry.State != EntityState.Modified
+            || !entry.Properties.Where(p => p.IsModified).All(p => LoginProperties.Contains(p.Metadata.Name));
     }
 
     private static string ResolveAction(EntityState state) => state switch

@@ -39,7 +39,7 @@ public partial class ReportService
             difference AS "Difference", difference_status AS "DifferenceStatus", observation AS "Observation",
             registered_at AS "RegisteredAt", last_follow_up_at AS "LastFollowUpAt",
             last_justification AS "LastJustification", last_follow_up_by AS "LastFollowUpBy", resolved_at AS "ResolvedAt"
-        FROM sp_report_differences({0}::int, {1}::varchar, {2}::bigint, {3}::bigint, {4}::bigint)
+        FROM sp_report_differences({0}::int, {1}::varchar, {2}::bigint, {3}::bigint, {4}::bigint, {5}::bigint)
         """;
 
     public async Task<ReportResult> ExportDifferencesReport(DifferencesReportQueryFilter filter, ReportFormat format)
@@ -58,7 +58,8 @@ public partial class ReportService
             (object?)status ?? DBNull.Value,
             (object?)filter.RegionId ?? DBNull.Value,
             (object?)filter.DistrictId ?? DBNull.Value,
-            (object?)restrictedDistrictId ?? DBNull.Value);
+            (object?)restrictedDistrictId ?? DBNull.Value,
+            (object?)filter.ChurchId ?? DBNull.Value);
 
         var scope = await ScopeTextAsync(filter.RegionId, filter.DistrictId, restrictedDistrictId);
         string[] info =
@@ -175,7 +176,7 @@ public partial class ReportService
             };
             using var workbook = new ClosedXML.Excel.XLWorkbook();
             AddSheet(workbook, $"Cumplimiento {filter.Year}", "CUMPLIMIENTO DE ARQUEOS", info, columns, rows, username);
-            file = new ReportFile(SaveWorkbook(workbook), ExcelContentType, $"{fileBase}.xlsx");
+            file = SpreadsheetFile(SaveWorkbook(workbook), format, fileBase);
         }
 
         await _auditLogService.LogReportAccess("report_compliance", "EXPORT", $"Cumplimiento {filter.Year} ({scope}) en {format}");
@@ -261,7 +262,7 @@ public partial class ReportService
             region_name AS "RegionName", district_name AS "DistrictName", pastor_name AS "PastorName",
             church_id AS "ChurchId", church_code AS "ChurchCode", church_name AS "ChurchName", church_type AS "ChurchType",
             period_month AS "PeriodMonth", acms_balance AS "AcmsBalance"
-        FROM sp_report_negative_acms({0}::int, {1}::int, {2}::int, {3}::bigint, {4}::bigint, {5}::bigint)
+        FROM sp_report_negative_acms({0}::int, {1}::int, {2}::int, {3}::bigint, {4}::bigint, {5}::bigint, {6}::bigint)
         """;
 
     public async Task<ReportResult> ExportNegativeAcmsReport(NegativeAcmsReportQueryFilter filter, ReportFormat format)
@@ -277,7 +278,8 @@ public partial class ReportService
             filter.Year, monthFrom, monthTo,
             (object?)filter.RegionId ?? DBNull.Value,
             (object?)filter.DistrictId ?? DBNull.Value,
-            (object?)restrictedDistrictId ?? DBNull.Value);
+            (object?)restrictedDistrictId ?? DBNull.Value,
+            (object?)filter.ChurchId ?? DBNull.Value);
 
         var churches = rows
             .GroupBy(r => r.ChurchId)
@@ -485,7 +487,7 @@ public partial class ReportService
             applied_year AS "AppliedYear", applied_month AS "AppliedMonth", field_name AS "FieldName",
             previous_amount AS "PreviousAmount", corrected_amount AS "CorrectedAmount", reason AS "Reason",
             app_user_full_name AS "AppUserFullName"
-        FROM sp_report_corrections({0}::int, {1}::bigint, {2}::bigint, {3}::bigint)
+        FROM sp_report_corrections({0}::int, {1}::bigint, {2}::bigint, {3}::bigint, {4}::bigint)
         """;
 
     public async Task<ReportResult> ExportCorrectionsReport(CorrectionsReportQueryFilter filter, ReportFormat format)
@@ -499,7 +501,8 @@ public partial class ReportService
             filter.Year,
             (object?)filter.RegionId ?? DBNull.Value,
             (object?)filter.DistrictId ?? DBNull.Value,
-            (object?)restrictedDistrictId ?? DBNull.Value);
+            (object?)restrictedDistrictId ?? DBNull.Value,
+            (object?)filter.ChurchId ?? DBNull.Value);
 
         var scope = await ScopeTextAsync(filter.RegionId, filter.DistrictId, restrictedDistrictId);
         string[] info = [$"Correcciones aplicadas en {filter.Year}: {rows.Count}", scope];
@@ -554,7 +557,7 @@ public partial class ReportService
             district_name AS "DistrictName", church_code AS "ChurchCode", church_name AS "ChurchName",
             church_type AS "ChurchType", old_value AS "OldValue", new_value AS "NewValue", reason AS "Reason",
             app_user_full_name AS "AppUserFullName"
-        FROM sp_report_church_movements({0}::date, {1}::date, {2}::varchar, {3}::bigint, {4}::bigint, {5}::bigint)
+        FROM sp_report_church_movements({0}::date, {1}::date, {2}::varchar, {3}::bigint, {4}::bigint, {5}::bigint, {6}::bigint)
         """;
 
     public async Task<ReportResult> ExportChurchMovementsReport(ChurchMovementsReportQueryFilter filter, ReportFormat format)
@@ -573,7 +576,8 @@ public partial class ReportService
             (object?)changeType ?? DBNull.Value,
             (object?)filter.RegionId ?? DBNull.Value,
             (object?)filter.DistrictId ?? DBNull.Value,
-            (object?)restrictedDistrictId ?? DBNull.Value);
+            (object?)restrictedDistrictId ?? DBNull.Value,
+            (object?)filter.ChurchId ?? DBNull.Value);
 
         var scope = await ScopeTextAsync(filter.RegionId, filter.DistrictId, restrictedDistrictId);
         string[] info =
@@ -655,7 +659,7 @@ public partial class ReportService
             using var workbook = new ClosedXML.Excel.XLWorkbook();
             var sheetName = title.Length > 31 ? title[..31] : title;
             AddSheet(workbook, sheetName, title, info, excelColumns, rows, username);
-            file = new ReportFile(SaveWorkbook(workbook), ExcelContentType, $"{fileBase}.xlsx");
+            file = SpreadsheetFile(SaveWorkbook(workbook), format, fileBase);
         }
 
         await _auditLogService.LogReportAccess(reportName, "EXPORT", $"{auditDescription} en {format}");

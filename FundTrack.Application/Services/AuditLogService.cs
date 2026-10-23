@@ -57,14 +57,11 @@ public class AuditLogService : IAuditLogService
             app_user_id AS "AppUserId",
             app_user_full_name AS "AppUserFullName",
             action AS "Action",
-            module AS "Module",
             table_name AS "TableName",
             record_id AS "RecordId",
-            description AS "Description",
+            record_label AS "RecordLabel",
             old_value AS "OldValue",
             new_value AS "NewValue",
-            ip AS "Ip",
-            user_agent AS "UserAgent",
             created_at AS "CreatedAt",
             total_records AS "TotalRecords"
         FROM sp_get_audit_logs(

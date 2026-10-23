@@ -268,6 +268,8 @@ CREATE TABLE local_fund_count (
     pastor_id BIGINT,
     church_type VARCHAR(30) NOT NULL,
     submission_status VARCHAR(30) NOT NULL,
+    -- La iglesia trajo su arqueo ya hecho: solo se registran el ACMS y el total.
+    summary_only BOOLEAN NOT NULL DEFAULT FALSE,
     acms_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
     -- Arqueo: extracto + depósito + billetes y monedas + dólares en Bs + documentos = total_amount.
     bank_statement_balance NUMERIC(14,2) NOT NULL DEFAULT 0,

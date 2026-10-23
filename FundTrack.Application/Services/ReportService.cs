@@ -62,7 +62,7 @@ public partial class ReportService : IReportService
             total_amount AS "TotalAmount",
             difference AS "Difference",
             difference_status AS "DifferenceStatus"
-        FROM sp_report_local_fund_year({0}::int, {1}::int, {2}::int, {3}::bigint, {4}::bigint, {5}::bigint)
+        FROM sp_report_local_fund_year({0}::int, {1}::int, {2}::int, {3}::bigint, {4}::bigint, {5}::bigint, {6}::bigint)
         """;
 
     private const string GetPendingSql = """
@@ -79,7 +79,7 @@ public partial class ReportService : IReportService
             total_amount AS "TotalAmount",
             difference AS "Difference",
             difference_status AS "DifferenceStatus"
-        FROM sp_report_pending({0}::bigint, {1}::bigint, {2}::bigint, {3}::bigint)
+        FROM sp_report_pending({0}::bigint, {1}::bigint, {2}::bigint, {3}::bigint, {4}::bigint)
         """;
 
     // ---------------------------------------------------------------------------------------
@@ -108,7 +108,7 @@ public partial class ReportService : IReportService
 
         var file = format == ReportFormat.Pdf
             ? new ReportFile(BuildLocalFundYearPdf(report, username), PdfContentType, $"{fileBase}.pdf")
-            : new ReportFile(BuildLocalFundYearExcel(report, username), ExcelContentType, $"{fileBase}.xlsx");
+            : SpreadsheetFile(BuildLocalFundYearExcel(report, username), format, fileBase);
 
         await _auditLogService.LogReportAccess(LocalFundYearReportName, "EXPORT", $"Fondo Local {report.Year} ({report.Scope}) en {format}");
         return new ReportResult(file, null);
@@ -133,7 +133,8 @@ public partial class ReportService : IReportService
             monthTo,
             (object?)filter.RegionId ?? DBNull.Value,
             (object?)filter.DistrictId ?? DBNull.Value,
-            (object?)restrictedDistrictId ?? DBNull.Value);
+            (object?)restrictedDistrictId ?? DBNull.Value,
+            (object?)filter.ChurchId ?? DBNull.Value);
 
         // De una fila por iglesia y mes a una fila por iglesia con los meses en columnas.
         var churches = rows
@@ -359,7 +360,7 @@ public partial class ReportService : IReportService
 
         var file = format == ReportFormat.Pdf
             ? new ReportFile(BuildPendingPdf(report, username), PdfContentType, $"{fileBase}.pdf")
-            : new ReportFile(BuildPendingExcel(report, username), ExcelContentType, $"{fileBase}.xlsx");
+            : SpreadsheetFile(BuildPendingExcel(report, username), format, fileBase);
 
         await _auditLogService.LogReportAccess(PendingReportName, "EXPORT", $"Pendientes {report.Month}/{report.Year} ({report.Scope}) en {format}");
         return new ReportResult(file, null);
@@ -385,7 +386,8 @@ public partial class ReportService : IReportService
             period.PeriodId,
             (object?)filter.RegionId ?? DBNull.Value,
             (object?)filter.DistrictId ?? DBNull.Value,
-            (object?)restrictedDistrictId ?? DBNull.Value);
+            (object?)restrictedDistrictId ?? DBNull.Value,
+            (object?)filter.ChurchId ?? DBNull.Value);
 
         return (new PendingReportDto
         {

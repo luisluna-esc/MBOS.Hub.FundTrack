@@ -10,6 +10,8 @@ public class LocalFundCount
     public long? PastorId { get; set; }
     public string ChurchType { get; set; } = string.Empty;
     public string SubmissionStatus { get; set; } = string.Empty;
+    /// <summary>La iglesia trajo su arqueo ya hecho: solo hay ACMS y total, sin detalle.</summary>
+    public bool SummaryOnly { get; set; }
     public decimal AcmsBalance { get; set; }
     // Arqueo del tesorero: extracto + depósito + billetes y monedas + dólares en Bs + documentos.
     public decimal BankStatementBalance { get; set; }

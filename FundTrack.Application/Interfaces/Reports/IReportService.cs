@@ -33,5 +33,5 @@ public interface IReportService
     Task<ReportResult> ExportChurchMovementsReport(ChurchMovementsReportQueryFilter filter, ReportFormat format);
 
     /// <summary>La hoja "Arqueo del fondo local" con las tres firmas: un arqueo o los de un mes de un distrito.</summary>
-    Task<ReportResult> ExportLocalFundCountVoucher(LocalFundCountVoucherQueryFilter filter);
+    Task<ReportResult> ExportLocalFundCountVoucher(LocalFundCountVoucherQueryFilter filter, ReportFormat format = ReportFormat.Pdf);
 }

@@ -6,6 +6,13 @@ public class LocalFundCountRequestDto
     public long PeriodId { get; set; }
     /// <summary>"submitted" o "not_submitted". Si no presentó, los montos del arqueo se ignoran.</summary>
     public string SubmissionStatus { get; set; } = string.Empty;
+    /// <summary>
+    /// La iglesia trajo su arqueo ya hecho: se registran solo el saldo ACMS y SummaryTotal, sin el
+    /// detalle (banco, efectivo, dólares ni documentos) y sin pedir observación si hay diferencia.
+    /// </summary>
+    public bool SummaryOnly { get; set; }
+    /// <summary>Total del arqueo que trajo la iglesia (solo cuando SummaryOnly).</summary>
+    public decimal SummaryTotal { get; set; }
     /// <summary>Saldo del ACMS al cierre del mes, digitado a mano.</summary>
     public decimal AcmsBalance { get; set; }
     // Los 4 montos del arqueo; todos opcionales (0 si no hay).
