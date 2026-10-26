@@ -2,6 +2,7 @@ using FundTrack.Application.Dtos.Funds;
 using FundTrack.Application.Dtos.Organization;
 using FundTrack.Application.Dtos.Security;
 using FundTrack.Application.Interfaces.Audit;
+using FundTrack.Application.Interfaces.Charts;
 using FundTrack.Application.Interfaces.Dashboard;
 using FundTrack.Application.Interfaces.Funds;
 using FundTrack.Application.Interfaces.Imports;
@@ -109,6 +110,7 @@ public static class DependencyInjection
         services.AddScoped<ILocalFundCountAttachmentService, LocalFundCountAttachmentService>();
 
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IChartService, ChartService>();
 
         services.AddScoped<IChurchImportService, ChurchImportService>();
 

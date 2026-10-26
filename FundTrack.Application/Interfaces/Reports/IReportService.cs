@@ -32,6 +32,9 @@ public interface IReportService
     /// <summary>Cierres, fusiones y cambios de distrito, tipo o nombre de iglesias entre dos fechas.</summary>
     Task<ReportResult> ExportChurchMovementsReport(ChurchMovementsReportQueryFilter filter, ReportFormat format);
 
+    /// <summary>Reporte individual de una iglesia: su saldo ACMS y su arqueo mes a mes en el rango elegido.</summary>
+    Task<ReportResult> ExportChurchStatementReport(ChurchStatementReportQueryFilter filter, ReportFormat format);
+
     /// <summary>La hoja "Arqueo del fondo local" con las tres firmas: un arqueo o los de un mes de un distrito.</summary>
     Task<ReportResult> ExportLocalFundCountVoucher(LocalFundCountVoucherQueryFilter filter, ReportFormat format = ReportFormat.Pdf);
 }

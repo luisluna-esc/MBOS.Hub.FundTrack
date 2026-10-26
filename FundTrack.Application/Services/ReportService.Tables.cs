@@ -31,7 +31,7 @@ public partial class ReportService
     // Diferencias por estado
     // ---------------------------------------------------------------------------------------
 
-    private const string GetDifferencesSql = """
+    internal const string GetDifferencesSql = """
         SELECT
             region_name AS "RegionName", district_name AS "DistrictName", pastor_name AS "PastorName",
             church_code AS "ChurchCode", church_name AS "ChurchName", church_type AS "ChurchType",

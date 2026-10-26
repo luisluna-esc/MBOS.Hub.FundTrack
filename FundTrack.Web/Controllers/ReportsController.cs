@@ -130,6 +130,18 @@ public class ReportsController : ControllerBase
     public Task<IActionResult> GetChurchMovementsTxt([FromQuery] ChurchMovementsReportQueryFilter filter) =>
         Export(_reportService.ExportChurchMovementsReport(filter, ReportFormat.Txt));
 
+    [HttpGet("church-statement/pdf")]
+    public Task<IActionResult> GetChurchStatementPdf([FromQuery] ChurchStatementReportQueryFilter filter) =>
+        Export(_reportService.ExportChurchStatementReport(filter, ReportFormat.Pdf));
+
+    [HttpGet("church-statement/excel")]
+    public Task<IActionResult> GetChurchStatementExcel([FromQuery] ChurchStatementReportQueryFilter filter) =>
+        Export(_reportService.ExportChurchStatementReport(filter, ReportFormat.Excel));
+
+    [HttpGet("church-statement/txt")]
+    public Task<IActionResult> GetChurchStatementTxt([FromQuery] ChurchStatementReportQueryFilter filter) =>
+        Export(_reportService.ExportChurchStatementReport(filter, ReportFormat.Txt));
+
     [HttpGet("local-fund-count/pdf")]
     public Task<IActionResult> GetLocalFundCountVoucher([FromQuery] LocalFundCountVoucherQueryFilter filter) =>
         Export(_reportService.ExportLocalFundCountVoucher(filter, ReportFormat.Pdf));

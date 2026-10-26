@@ -5,7 +5,8 @@
 -- =====================================================================
 
 INSERT INTO menu (name, translation_key, route, icon, parent_menu_id, display_order, is_active) VALUES
-('Inicio', 'nav.home', '/', 'home', NULL, 1, TRUE)
+('Inicio', 'nav.home', '/', 'home', NULL, 1, TRUE),
+('Gráficas', 'nav.charts', '/charts', 'chart', NULL, 5, TRUE)
 ON CONFLICT (route) DO NOTHING;
 
 -- Grupos (sin ruta propia).
@@ -39,6 +40,7 @@ JOIN (VALUES
     ('Reportes', 'Resumen por región', 'nav.reportRegionSummary', '/reports/region-summary', 'report', 6),
     ('Reportes', 'Correcciones', 'nav.reportCorrections', '/reports/corrections', 'report', 7),
     ('Reportes', 'Movimientos de iglesias', 'nav.reportChurchMovements', '/reports/church-movements', 'report', 8),
+    ('Reportes', 'Reporte por iglesia', 'nav.reportChurchStatement', '/reports/church-statement', 'report', 9),
     ('Administración', 'Usuarios', 'nav.users', '/admin/users', 'users', 1),
     ('Administración', 'Roles', 'nav.roles', '/admin/roles', 'shield', 2),
     ('Administración', 'Auditoría', 'nav.auditLogs', '/admin/audit-logs', 'history', 3)
