@@ -6,4 +6,6 @@ public class ChartsQueryFilter
     public int? Year { get; set; }
     public long? RegionId { get; set; }
     public long? DistrictId { get; set; }
+    /// <summary>Una sola iglesia: en vez del resumen de todas, su fondo local mes a mes.</summary>
+    public long? ChurchId { get; set; }
 }

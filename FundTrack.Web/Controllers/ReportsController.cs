@@ -142,6 +142,16 @@ public class ReportsController : ControllerBase
     public Task<IActionResult> GetChurchStatementTxt([FromQuery] ChurchStatementReportQueryFilter filter) =>
         Export(_reportService.ExportChurchStatementReport(filter, ReportFormat.Txt));
 
+    /// <summary>Reporte de una gráfica (botón Reporte de la pantalla Gráficas). format: pdf, excel o txt.</summary>
+    [HttpPost("chart/{format}")]
+    public Task<IActionResult> PostChartReport(string format, [FromBody] ChartReportRequestDto request) =>
+        Export(_reportService.ExportChartReport(request, format switch
+        {
+            "excel" => ReportFormat.Excel,
+            "txt" => ReportFormat.Txt,
+            _ => ReportFormat.Pdf
+        }));
+
     [HttpGet("local-fund-count/pdf")]
     public Task<IActionResult> GetLocalFundCountVoucher([FromQuery] LocalFundCountVoucherQueryFilter filter) =>
         Export(_reportService.ExportLocalFundCountVoucher(filter, ReportFormat.Pdf));

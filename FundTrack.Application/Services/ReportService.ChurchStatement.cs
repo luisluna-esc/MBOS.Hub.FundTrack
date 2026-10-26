@@ -19,7 +19,7 @@ public partial class ReportService
     private const string StatementSoftColor = "#E8EEF6";
     private const int MaxStatementMonths = 36;
 
-    private const string GetChurchStatementSql = """
+    internal const string GetChurchStatementSql = """
         SELECT
             church_code AS "ChurchCode", church_name AS "ChurchName", church_type AS "ChurchType",
             district_name AS "DistrictName", region_name AS "RegionName", pastor_name AS "PastorName",
@@ -162,6 +162,29 @@ public partial class ReportService
                             last is null ? null : DifferenceColor(last.Difference), true));
                     });
 
+                    // Gráficas: el fondo local mes a mes (altas y bajas) y la diferencia de cada mes.
+                    if (summary.Submitted > 0)
+                    {
+                        column.Item().PaddingTop(4).Border(1).BorderColor(Colors.Grey.Lighten2).Padding(8).Column(chart =>
+                        {
+                            chart.Spacing(4);
+                            chart.Item().Row(row =>
+                            {
+                                row.RelativeItem().Text("Fondo local mes a mes").FontSize(11).SemiBold();
+                                row.AutoItem().Element(c => LegendEntry(c, ChartAcmsColor, "Saldo ACMS"));
+                                row.AutoItem().PaddingLeft(10).Element(c => LegendEntry(c, ChartCustodyColor, "Total en custodia"));
+                            });
+                            chart.Item().Height(150).Svg(StatementLineSvg(rows, 530, 150));
+                            chart.Item().PaddingTop(4).Row(row =>
+                            {
+                                row.RelativeItem().Text("Diferencia de cada mes").FontSize(9).SemiBold();
+                                row.AutoItem().Element(c => LegendEntry(c, ChartSurplusColor, "Sobra"));
+                                row.AutoItem().PaddingLeft(10).Element(c => LegendEntry(c, ChartShortageColor, "Falta"));
+                            });
+                            chart.Item().Height(90).Svg(StatementDifferenceSvg(rows, 530, 90));
+                        });
+                    }
+
                     // Desglose por meses.
                     column.Item().PaddingTop(4).Text("Desglose por meses").FontSize(11).SemiBold();
                     column.Item().Table(table =>
@@ -277,6 +300,15 @@ public partial class ReportService
         });
 
         return document.GeneratePdf();
+    }
+
+    private static void LegendEntry(IContainer container, string color, string label)
+    {
+        container.Row(row =>
+        {
+            row.AutoItem().AlignMiddle().Width(8).Height(8).Background(color);
+            row.AutoItem().PaddingLeft(3).Text(label).FontSize(7.5f).FontColor(Colors.Grey.Darken2);
+        });
     }
 
     private static void StatementCard(IContainer container, string title, string value, string caption, string? valueColor, bool highlight)

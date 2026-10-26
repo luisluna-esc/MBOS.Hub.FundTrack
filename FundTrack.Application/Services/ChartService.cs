@@ -3,17 +3,21 @@ using FundTrack.Application.Dtos.Charts;
 using FundTrack.Application.Dtos.Reports;
 using FundTrack.Application.Interfaces.Charts;
 using FundTrack.Application.Interfaces.Security;
+using FundTrack.core.Constants;
+using FundTrack.core.Entities.Organization;
 using FundTrack.core.Entities.ResponseApi.Details;
 using FundTrack.core.Entities.ResponseApi.DisplayFormat;
 using FundTrack.core.Interfaces;
 using FundTrack.core.QueryFilters.Charts;
+using Microsoft.EntityFrameworkCore;
 
 namespace FundTrack.Application.Services;
 
 // Pantalla Gráficas: una consulta (sp_chart_counts, un mes y una región por fila) que aquí se suma
 // por mes y por región, más las iglesias con más faltante del año (sp_report_differences, el mismo
 // del reporte de diferencias). Los meses que todavía no empiezan no se cuentan. El Pastor solo ve
-// su distrito.
+// su distrito. Si se elige una iglesia, en lugar del resumen se devuelve su fondo local mes a mes
+// (sp_report_church_statement, el mismo del Reporte por iglesia).
 public class ChartService : IChartService
 {
     private const int TopShortageCount = 10;
@@ -52,6 +56,15 @@ public class ChartService : IChartService
 
         var lastMonth = year == today.Year ? today.Month : 12;
         var restrictedDistrictId = await _dataScopeService.GetRestrictedDistrictId();
+
+        if (filter.ChurchId.HasValue)
+        {
+            return Ok(new ChartsDto
+            {
+                Year = year,
+                Church = await GetChurchDetail(filter.ChurchId.Value, year, lastMonth, restrictedDistrictId)
+            });
+        }
 
         var rows = (await _unitOfWork.SqlQueryAsync<ChartCountsRowDto>(
                 GetChartCountsSql,
@@ -102,11 +115,62 @@ public class ChartService : IChartService
                 .ToList()
         };
 
-        return new ResponseGetObject
+        return Ok(charts);
+    }
+
+    private static ResponseGetObject Ok(ChartsDto charts) => new()
+    {
+        Data = charts,
+        Messages = [],
+        StatusCode = HttpStatusCode.OK
+    };
+
+    /// <summary>La iglesia mes a mes, de enero al último mes que ya empezó. Null si no se puede ver.</summary>
+    private async Task<ChartChurchDetailDto?> GetChurchDetail(long churchId, int year, int lastMonth, long? restrictedDistrictId)
+    {
+        var periods = await _unitOfWork.Repository<Period>().Query()
+            .Where(p => p.Year == year && p.Month <= lastMonth)
+            .OrderBy(p => p.Month)
+            .ToListAsync();
+        if (periods.Count == 0)
+            return null;
+
+        var rows = await _unitOfWork.SqlQueryAsync<ChurchStatementReportRowDto>(
+            ReportService.GetChurchStatementSql,
+            churchId,
+            periods[0].PeriodId,
+            periods[^1].PeriodId,
+            (object?)restrictedDistrictId ?? DBNull.Value);
+        if (rows.Count == 0)
+            return null;
+
+        var church = rows[^1];
+        return new ChartChurchDetailDto
         {
-            Data = charts,
-            Messages = [],
-            StatusCode = HttpStatusCode.OK
+            ChurchCode = church.ChurchCode,
+            ChurchName = church.ChurchName,
+            ChurchType = church.ChurchType,
+            DistrictName = church.DistrictName,
+            RegionName = church.RegionName,
+            PastorName = church.PastorName,
+            Months = rows.Select(r =>
+            {
+                var submitted = r.HasCount && r.SubmissionStatus == SubmissionStatuses.Submitted;
+                return new ChartChurchMonthDto
+                {
+                    Month = r.PeriodMonth,
+                    Status = !r.HasCount ? "missing"
+                        : !submitted ? "notSubmitted"
+                        : r.Difference == 0 ? "noDifference"
+                        : r.DifferenceStatus == DifferenceStatuses.Resolved ? "resolved" : "withDifference",
+                    Submitted = submitted,
+                    SummaryOnly = r.SummaryOnly,
+                    AcmsBalance = r.AcmsBalance,
+                    TotalAmount = r.TotalAmount,
+                    Difference = r.Difference,
+                    Observation = r.Observation
+                };
+            }).ToList()
         };
     }
 

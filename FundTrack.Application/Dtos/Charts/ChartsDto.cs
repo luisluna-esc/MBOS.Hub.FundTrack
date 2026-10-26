@@ -9,6 +9,32 @@ public class ChartsDto
     public List<ChartRegionDto> Regions { get; set; } = [];
     /// <summary>Las iglesias con más faltante en el año (suma de sus diferencias negativas).</summary>
     public List<ChartChurchDto> TopShortages { get; set; } = [];
+    /// <summary>Solo cuando se eligió una iglesia: sus datos y cada mes del año.</summary>
+    public ChartChurchDetailDto? Church { get; set; }
+}
+
+public class ChartChurchDetailDto
+{
+    public string ChurchCode { get; set; } = string.Empty;
+    public string ChurchName { get; set; } = string.Empty;
+    public string ChurchType { get; set; } = string.Empty;
+    public string DistrictName { get; set; } = string.Empty;
+    public string RegionName { get; set; } = string.Empty;
+    public string? PastorName { get; set; }
+    public List<ChartChurchMonthDto> Months { get; set; } = [];
+}
+
+/// <summary>Un mes de la iglesia. Status: missing, notSubmitted, noDifference, withDifference o resolved.</summary>
+public class ChartChurchMonthDto
+{
+    public int Month { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public bool Submitted { get; set; }
+    public bool SummaryOnly { get; set; }
+    public decimal AcmsBalance { get; set; }
+    public decimal TotalAmount { get; set; }
+    public decimal Difference { get; set; }
+    public string? Observation { get; set; }
 }
 
 /// <summary>En qué quedaron las iglesias que debían presentar arqueo, y los montos.</summary>

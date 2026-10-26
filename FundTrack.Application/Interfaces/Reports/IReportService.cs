@@ -35,6 +35,9 @@ public interface IReportService
     /// <summary>Reporte individual de una iglesia: su saldo ACMS y su arqueo mes a mes en el rango elegido.</summary>
     Task<ReportResult> ExportChurchStatementReport(ChurchStatementReportQueryFilter filter, ReportFormat format);
 
+    /// <summary>Una gráfica de la pantalla Gráficas como reporte: la gráfica y su tabla.</summary>
+    Task<ReportResult> ExportChartReport(ChartReportRequestDto request, ReportFormat format);
+
     /// <summary>La hoja "Arqueo del fondo local" con las tres firmas: un arqueo o los de un mes de un distrito.</summary>
     Task<ReportResult> ExportLocalFundCountVoucher(LocalFundCountVoucherQueryFilter filter, ReportFormat format = ReportFormat.Pdf);
 }
