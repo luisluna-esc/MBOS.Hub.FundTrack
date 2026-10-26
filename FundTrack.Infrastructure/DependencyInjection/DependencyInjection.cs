@@ -68,9 +68,6 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
 
-        services.AddScoped<IPasswordService, PasswordService>();
-        services.AddScoped<IValidator<ChangePasswordRequestDto>, ChangePasswordRequestValidator>();
-
         services.Configure<AuditRetentionOptions>(configuration.GetSection("AuditRetention"));
         services.AddScoped(sp => sp.GetRequiredService<IOptions<AuditRetentionOptions>>().Value);
         services.AddScoped<IAuditLogService, AuditLogService>();
